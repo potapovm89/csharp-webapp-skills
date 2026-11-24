@@ -48,43 +48,43 @@ C# / .NET 10, монорепо-солюшен, PostgreSQL. Точные сигн
 
 ---
 
-## Каталог доступных скиллов (.agents/skills/)
+## Каталог доступных скиллов (skills/)
 
-Для решения задач активируйте соответствующие скиллы из папки `.agents/skills/`.
+Для решения задач активируйте соответствующие скиллы из папки `skills/`.
 
 > Типовую фичу целиком (эндпоинт, консьюмер, джоба, сущность, интеграция) начинайте с `feature-recipes`: там упорядоченный чеклист по слоям со ссылками на профильные скиллы и сигнатуры проектных хелперов.
 > Фронтенд: `react-frontend` — для React + TypeScript, `blazor-frontend` — только для Blazor-проектов.
 
 | Задача / Область | Скилл | Путь к скиллу |
 | ---------------- | ----- | ------------- |
-| Порядок работы над задачей (план, проверка уверенности, ревью) | `task-lifecycle` | [.agents/skills/task-lifecycle/SKILL.md](.agents/skills/task-lifecycle/SKILL.md) |
-| Сквозные рецепты фич (эндпоинт + outbox, консьюмер, джоба, сущность + миграция, внешний API, gRPC-метод), сигнатуры хелперов | `feature-recipes` | [.agents/skills/feature-recipes/SKILL.md](.agents/skills/feature-recipes/SKILL.md) |
-| Архитектура монорепо, слои решения, composition root, мультитенантность | `solution-architecture` | [.agents/skills/solution-architecture/SKILL.md](.agents/skills/solution-architecture/SKILL.md) |
-| C# код-стайл, именование, XML-документация, SOLID/KISS/DRY/YAGNI, лицензии | `csharp-code-style` | [.agents/skills/csharp-code-style/SKILL.md](.agents/skills/csharp-code-style/SKILL.md) |
-| Бизнес-логика в Stories: MediatR **или** Executor-стори (один механизм на солюшен), валидаторы | `cqrs-stories` | [.agents/skills/cqrs-stories/SKILL.md](.agents/skills/cqrs-stories/SKILL.md) |
-| Многошаговые процессы с компенсациями (саги): process manager vs хореография, таймауты, застрявшие процессы | `sagas-processes` | [.agents/skills/sagas-processes/SKILL.md](.agents/skills/sagas-processes/SKILL.md) |
-| Доменные сущности, базовые классы ключей, миксины, DTO, EF конфигурации | `domain-modeling` | [.agents/skills/domain-modeling/SKILL.md](.agents/skills/domain-modeling/SKILL.md) |
-| PostgreSQL, доменные сервисы (EF Core / Dapper), транзакции ITransactionScope, конкурентность, производительность запросов | `postgresql-data-access` | [.agents/skills/postgresql-data-access/SKILL.md](.agents/skills/postgresql-data-access/SKILL.md) |
-| Миграции БД (EF Core, FluentMigrator), миграции без простоя, DBML-схемы | `database-migrations` | [.agents/skills/database-migrations/SKILL.md](.agents/skills/database-migrations/SKILL.md) |
-| Документная БД MongoDB, распределённый кэш Redis (Valkey), стратегия кэширования (HybridCache) | `nosql-and-cache` | [.agents/skills/nosql-and-cache/SKILL.md](.agents/skills/nosql-and-cache/SKILL.md) |
-| Брокеры Kafka и RabbitMQ (продюсеры, консьюмеры, IProcessor, outbox/inbox, retry и DLQ, версии сообщений) | `message-brokers` | [.agents/skills/message-brokers/SKILL.md](.agents/skills/message-brokers/SKILL.md) |
-| S3-совместимое файловое хранилище (RustFS локально и в тестах) | `s3-storage` | [.agents/skills/s3-storage/SKILL.md](.agents/skills/s3-storage/SKILL.md) |
-| PDF-отчёты: PeachPDF (HTML→PDF) и PDFsharp ≤ 6.2.x, шаблоны, статусы, выдача через S3 | `pdf-reports` | [.agents/skills/pdf-reports/SKILL.md](.agents/skills/pdf-reports/SKILL.md) |
-| Вызовы внешних REST API (HttpClient) и внешних gRPC-сервисов | `api-clients` | [.agents/skills/api-clients/SKILL.md](.agents/skills/api-clients/SKILL.md) |
-| WebHost REST API, контроллеры (User / Admin), middleware pipeline, Swagger | `web-host-api` | [.agents/skills/web-host-api/SKILL.md](.agents/skills/web-host-api/SKILL.md) |
-| RpcHost gRPC-сервисы, структура и правила .proto файлов, интерцепторы | `grpc-services` | [.agents/skills/grpc-services/SKILL.md](.agents/skills/grpc-services/SKILL.md) |
-| WorkerHost, фоновые задачи (Quartz, cron, работа на нескольких репликах) | `worker-host-jobs` | [.agents/skills/worker-host-jobs/SKILL.md](.agents/skills/worker-host-jobs/SKILL.md) |
-| Real-time push клиентам: SignalR-хаб в RealtimeHost, авторизация подписок, outbox→push, backplane, BFF-прокси | `realtime-signalr` | [.agents/skills/realtime-signalr/SKILL.md](.agents/skills/realtime-signalr/SKILL.md) |
-| Blazor WebAssembly frontend UI, компоненты, изоляция стилей, локализация | `blazor-frontend` | [.agents/skills/blazor-frontend/SKILL.md](.agents/skills/blazor-frontend/SKILL.md) |
-| React + TypeScript фронтенд: сгенерированный API-клиент, TanStack Query, формы, OIDC PKCE, i18n, тесты, XSS/CSP | `react-frontend` | [.agents/skills/react-frontend/SKILL.md](.agents/skills/react-frontend/SKILL.md) |
-| Запуск в контейнерах и Kubernetes: Dockerfile, пробы, graceful shutdown, миграции до деплоя, ресурсы, реплики | `runtime-deployment` | [.agents/skills/runtime-deployment/SKILL.md](.agents/skills/runtime-deployment/SKILL.md) |
-| CI/CD, release gates, lock-файлы, SBOM, provenance, проверка подлинности и продвижение digest | `delivery-and-supply-chain` | [.agents/skills/delivery-and-supply-chain/SKILL.md](.agents/skills/delivery-and-supply-chain/SKILL.md) |
-| Резервные копии, PostgreSQL PITR, RPO/RTO, согласованное восстановление данных и изолированные drills | `data-recovery` | [.agents/skills/data-recovery/SKILL.md](.agents/skills/data-recovery/SKILL.md) |
-| Нефункциональные требования, SLI/SLO, error budget, burn-rate алерты, нагрузка и отказы | `reliability-and-performance` | [.agents/skills/reliability-and-performance/SKILL.md](.agents/skills/reliability-and-performance/SKILL.md) |
-| Локальный полигон .NET Aspire, оркестрация контейнеров и ресурсов | `aspire-environment` | [.agents/skills/aspire-environment/SKILL.md](.agents/skills/aspire-environment/SKILL.md) |
-| Настройки Options (AddOptionsWithValidation), среды, защита секретов | `configuration-secrets` | [.agents/skills/configuration-secrets/SKILL.md](.agents/skills/configuration-secrets/SKILL.md) |
-| Безопасность: аутентификация и авторизация, владение ресурсами, CORS, rate limiting, инъекции, SSRF, персональные данные, уязвимые зависимости | `security` | [.agents/skills/security/SKILL.md](.agents/skills/security/SKILL.md) |
-| Логирование Serilog, метрики и трейсы OpenTelemetry, эндпоинты health | `observability` | [.agents/skills/observability/SKILL.md](.agents/skills/observability/SKILL.md) |
-| Юнит-тесты (xUnit, Moq, BaseTestCasesClass), интеграционные (Testcontainers), архитектурные и контрактные, детерминизм тестов | `testing` | [.agents/skills/testing/SKILL.md](.agents/skills/testing/SKILL.md) |
-| Git flow, именование веток, формат коммитов, шаблон Merge Request | `git-workflow` | [.agents/skills/git-workflow/SKILL.md](.agents/skills/git-workflow/SKILL.md) |
-| Документирование в docs/ (C4 DSL, DBML, контракты API/брокеров, роли, ADR, runbook) | `project-documentation` | [.agents/skills/project-documentation/SKILL.md](.agents/skills/project-documentation/SKILL.md) |
+| Порядок работы над задачей (план, проверка уверенности, ревью) | `task-lifecycle` | [skills/task-lifecycle/SKILL.md](skills/task-lifecycle/SKILL.md) |
+| Сквозные рецепты фич (эндпоинт + outbox, консьюмер, джоба, сущность + миграция, внешний API, gRPC-метод), сигнатуры хелперов | `feature-recipes` | [skills/feature-recipes/SKILL.md](skills/feature-recipes/SKILL.md) |
+| Архитектура монорепо, слои решения, composition root, мультитенантность | `solution-architecture` | [skills/solution-architecture/SKILL.md](skills/solution-architecture/SKILL.md) |
+| C# код-стайл, именование, XML-документация, SOLID/KISS/DRY/YAGNI, лицензии | `csharp-code-style` | [skills/csharp-code-style/SKILL.md](skills/csharp-code-style/SKILL.md) |
+| Бизнес-логика в Stories: MediatR **или** Executor-стори (один механизм на солюшен), валидаторы | `cqrs-stories` | [skills/cqrs-stories/SKILL.md](skills/cqrs-stories/SKILL.md) |
+| Многошаговые процессы с компенсациями (саги): process manager vs хореография, таймауты, застрявшие процессы | `sagas-processes` | [skills/sagas-processes/SKILL.md](skills/sagas-processes/SKILL.md) |
+| Доменные сущности, базовые классы ключей, миксины, DTO, EF конфигурации | `domain-modeling` | [skills/domain-modeling/SKILL.md](skills/domain-modeling/SKILL.md) |
+| PostgreSQL, доменные сервисы (EF Core / Dapper), транзакции ITransactionScope, конкурентность, производительность запросов | `postgresql-data-access` | [skills/postgresql-data-access/SKILL.md](skills/postgresql-data-access/SKILL.md) |
+| Миграции БД (EF Core, FluentMigrator), миграции без простоя, DBML-схемы | `database-migrations` | [skills/database-migrations/SKILL.md](skills/database-migrations/SKILL.md) |
+| Документная БД MongoDB, распределённый кэш Redis (Valkey), стратегия кэширования (HybridCache) | `nosql-and-cache` | [skills/nosql-and-cache/SKILL.md](skills/nosql-and-cache/SKILL.md) |
+| Брокеры Kafka и RabbitMQ (продюсеры, консьюмеры, IProcessor, outbox/inbox, retry и DLQ, версии сообщений) | `message-brokers` | [skills/message-brokers/SKILL.md](skills/message-brokers/SKILL.md) |
+| S3-совместимое файловое хранилище (RustFS локально и в тестах) | `s3-storage` | [skills/s3-storage/SKILL.md](skills/s3-storage/SKILL.md) |
+| PDF-отчёты: PeachPDF (HTML→PDF) и PDFsharp ≤ 6.2.x, шаблоны, статусы, выдача через S3 | `pdf-reports` | [skills/pdf-reports/SKILL.md](skills/pdf-reports/SKILL.md) |
+| Вызовы внешних REST API (HttpClient) и внешних gRPC-сервисов | `api-clients` | [skills/api-clients/SKILL.md](skills/api-clients/SKILL.md) |
+| WebHost REST API, контроллеры (User / Admin), middleware pipeline, Swagger | `web-host-api` | [skills/web-host-api/SKILL.md](skills/web-host-api/SKILL.md) |
+| RpcHost gRPC-сервисы, структура и правила .proto файлов, интерцепторы | `grpc-services` | [skills/grpc-services/SKILL.md](skills/grpc-services/SKILL.md) |
+| WorkerHost, фоновые задачи (Quartz, cron, работа на нескольких репликах) | `worker-host-jobs` | [skills/worker-host-jobs/SKILL.md](skills/worker-host-jobs/SKILL.md) |
+| Real-time push клиентам: SignalR-хаб в RealtimeHost, авторизация подписок, outbox→push, backplane, BFF-прокси | `realtime-signalr` | [skills/realtime-signalr/SKILL.md](skills/realtime-signalr/SKILL.md) |
+| Blazor WebAssembly frontend UI, компоненты, изоляция стилей, локализация | `blazor-frontend` | [skills/blazor-frontend/SKILL.md](skills/blazor-frontend/SKILL.md) |
+| React + TypeScript фронтенд: сгенерированный API-клиент, TanStack Query, формы, OIDC PKCE, i18n, тесты, XSS/CSP | `react-frontend` | [skills/react-frontend/SKILL.md](skills/react-frontend/SKILL.md) |
+| Запуск в контейнерах и Kubernetes: Dockerfile, пробы, graceful shutdown, миграции до деплоя, ресурсы, реплики | `runtime-deployment` | [skills/runtime-deployment/SKILL.md](skills/runtime-deployment/SKILL.md) |
+| CI/CD, release gates, lock-файлы, SBOM, provenance, проверка подлинности и продвижение digest | `delivery-and-supply-chain` | [skills/delivery-and-supply-chain/SKILL.md](skills/delivery-and-supply-chain/SKILL.md) |
+| Резервные копии, PostgreSQL PITR, RPO/RTO, согласованное восстановление данных и изолированные drills | `data-recovery` | [skills/data-recovery/SKILL.md](skills/data-recovery/SKILL.md) |
+| Нефункциональные требования, SLI/SLO, error budget, burn-rate алерты, нагрузка и отказы | `reliability-and-performance` | [skills/reliability-and-performance/SKILL.md](skills/reliability-and-performance/SKILL.md) |
+| Локальный полигон .NET Aspire, оркестрация контейнеров и ресурсов | `aspire-environment` | [skills/aspire-environment/SKILL.md](skills/aspire-environment/SKILL.md) |
+| Настройки Options (AddOptionsWithValidation), среды, защита секретов | `configuration-secrets` | [skills/configuration-secrets/SKILL.md](skills/configuration-secrets/SKILL.md) |
+| Безопасность: аутентификация и авторизация, владение ресурсами, CORS, rate limiting, инъекции, SSRF, персональные данные, уязвимые зависимости | `security` | [skills/security/SKILL.md](skills/security/SKILL.md) |
+| Логирование Serilog, метрики и трейсы OpenTelemetry, эндпоинты health | `observability` | [skills/observability/SKILL.md](skills/observability/SKILL.md) |
+| Юнит-тесты (xUnit, Moq, BaseTestCasesClass), интеграционные (Testcontainers), архитектурные и контрактные, детерминизм тестов | `testing` | [skills/testing/SKILL.md](skills/testing/SKILL.md) |
+| Git flow, именование веток, формат коммитов, шаблон Merge Request | `git-workflow` | [skills/git-workflow/SKILL.md](skills/git-workflow/SKILL.md) |
+| Документирование в docs/ (C4 DSL, DBML, контракты API/брокеров, роли, ADR, runbook) | `project-documentation` | [skills/project-documentation/SKILL.md](skills/project-documentation/SKILL.md) |
