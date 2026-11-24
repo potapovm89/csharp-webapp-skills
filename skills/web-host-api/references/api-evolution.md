@@ -25,7 +25,7 @@ Clients (frontends, other services, partner stores) update on their own schedule
 ## Idempotent Writes
 - `PUT` and `DELETE` are idempotent by definition; implement them that way.
 - `POST` that creates a resource identified by a business key (store + order) is naturally idempotent: a retry finds the existing row through the unique constraint.
-- Otherwise accept an `Idempotency-Key` header (see `postgresql-data-access`, concurrency.md): store key + request hash + response, return the stored response on retry, reject the same key with a different body with 422.
+- Otherwise accept an `Idempotency-Key` header. Bind the owner's key to the method, operation, target resource and effect-changing inputs using the [REST fingerprint](../../postgresql-data-access/references/concurrency.md#idempotency-key-for-rest). Replay only a matching authorized request. Return 422 for a different operation, resource or payload under the same key.
 
 ## Error Contract
 - [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html) everywhere (supersedes RFC 7807); `type` is a stable URI per error kind, `title` a stable short text, `detail` human-readable. Updating this reference does not change the existing wire contract.

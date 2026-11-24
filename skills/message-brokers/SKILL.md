@@ -24,9 +24,9 @@ Read the existing topic or queue contract, broker configuration and failure path
 - **Topic & Queue Naming**: Always `kebab-case` (e.g. `order-created-events`); retry and dead-letter destinations are `<name>-retry` and `<name>-dlq`.
 - **Contracts**: Message payloads are strongly typed DTOs from `Itl.<Project>.Contracts` serialized as JSON, with standard headers `message-id`, `message-type`, `message-version`, `traceparent`, `correlation-id`.
 - **Transactional outbox (mandatory)**: if a use-case writes to the database and publishes a message, the message is written to the outbox table in the same transaction and published by a relay. Never publish directly inside or right after a DB transaction. See [outbox.md](./references/outbox.md).
-- **Idempotency (mandatory)**: every consumer deduplicates — inbox table keyed by `message-id`, or a business key protected by a unique constraint, in the same transaction as the business change. A check-then-insert without a unique constraint is not idempotent.
+- **Idempotency (mandatory)**: deduplicate physical redelivery by `message-id` or use a uniquely constrained key for the same business operation. Apply deduplication in the transaction that changes business state. Across paired contract versions, use a shared logical event key as described in the cutover.
 - **No silent loss**: the processor throws on failure; the worker retries transient errors, then moves the message to a retry or dead-letter destination, and only then acknowledges / stores the offset. Poison messages and unsupported versions go to the DLQ immediately. DLQs are monitored.
-- **Versioning**: additive changes keep `message-version`; breaking changes bump it with a period of parallel publishing. Consumers ignore unknown fields.
+- **Versioning**: additive changes keep `message-version`. Consumers ignore unknown fields. Breaking changes increment the version and route it separately from older consumers. For Kafka, follow the [versioned-topic cutover](./references/kafka.md#breaking-change-cutover).
 - **Tracing**: propagate W3C trace context through message headers.
 - **Contract Documentation**: every topic/queue is documented in `docs/contracts/kafka/` or `docs/contracts/rabbitmq/`: key semantics, message types and versions, partitions/queue type, retry and DLQ destinations, producers and consumers.
 

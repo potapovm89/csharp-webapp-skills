@@ -110,4 +110,4 @@ If the use-case also writes to the database, do not call `BasicPublishAsync` fro
 - Propagate the trace context in `BasicProperties.Headers` with the explicit W3C propagator (inject on publish, extract on consume) exactly as shown in `kafka.md` "Tracing".
 
 ## Versioning
-Same rules as Kafka (see `kafka.md` "Message Contracts & Versioning"): additive changes keep the version, breaking changes bump `message-version` with a parallel-publishing period; unsupported versions go to the DLQ.
+Additive changes keep the version. For a breaking change, bump `message-version` and route the new representation through a separate routing key and queue binding, so the v1 queue receives only v1. If a logical consumer processes overlapping versions, deduplicate by the shared logical event identity as in [the version cutover](./kafka.md#breaking-change-cutover). Keep the unsupported-version DLQ rule for deliveries that violate the queue's contract.

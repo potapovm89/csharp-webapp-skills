@@ -24,7 +24,7 @@ public uint Version { get; set; }
 - Keep locking transactions short; never call external services while holding a row lock.
 
 ## Uniqueness Instead of "Check Then Insert"
-- "Does it exist? → insert" races under concurrency. Enforce uniqueness with a (filtered) unique index and translate `PostgresException { SqlState: "23505" }` into a domain error (400/409).
+- "Does it exist? → insert" races under concurrency. Enforce uniqueness with a unique index. If translating a known constraint violation into a domain error (400/409), check both `SqlState == "23505"` and the expected `ConstraintName`. Roll back the failed transaction and propagate unexpected violations.
 - Keep the pre-check only for a friendly error in the common case; the unique index is the guarantee.
 
 ## Distributed Locks
@@ -32,13 +32,13 @@ public uint Version { get; set; }
 - Redis locks only with a TTL and a fencing check; prefer the database you already write to.
 
 ## Idempotency-Key for REST
-For `POST` endpoints without a natural business key:
+For `POST` endpoints without a natural business key, scope the key to the authenticated owner and bind it to the complete operation using a canonical request fingerprint:
 
 ```sql
 CREATE TABLE idempotency_keys (
     owner_id       varchar(100) NOT NULL,   -- store / user from claims
     key            varchar(100) NOT NULL,
-    request_hash   char(64)     NOT NULL,   -- SHA-256 of the canonical request body
+    request_hash   char(64)     NOT NULL,   -- SHA-256 of the canonical operation, resource and inputs
     status_code    int          NULL,
     response_body  jsonb        NULL,
     created_date   timestamptz  NOT NULL DEFAULT now(),
@@ -46,7 +46,9 @@ CREATE TABLE idempotency_keys (
 );
 ```
 
-1. In the use-case transaction: `INSERT ... ON CONFLICT DO NOTHING`.
-2. Inserted → execute the use-case and store status and response in the same transaction.
-3. Not inserted → same hash and stored response: return it; same hash, no response yet: 409 (in progress); different hash: 422.
-4. Keys expire (cleanup job, e.g. after 24 h). The key is scoped by the owner from claims, never global.
+1. Authenticate and authorize the caller before looking up or replaying a cached result. Hash a structured canonical tuple of HTTP method, stable operation identifier (include API version when semantics differ), validated target resource type and identifier, applicable effect-changing route/query inputs, and canonical request body. An empty body still has an operation and may have a target resource.
+2. In the use-case transaction, reserve the owner's key using `INSERT ... ON CONFLICT (owner_id, key) DO NOTHING`. If inserted, execute the use case and store the status and response in the same transaction.
+3. If the key exists, check the entire fingerprint before using its result. Matching completed request → return the stored status and body. Matching request with a visible in-progress record → return 409. Different fingerprint → return 422 without replaying the response or executing the mutation. A concurrent reservation must have one winner.
+4. Expire keys per the documented retry window. When migrating existing body-only hashes, verify the original operation and target before replaying any unexpired record. If the context cannot be recovered, use the documented ambiguous-key response and withhold both replay and re-execution. Preserve the guarantee during rolling deployment.
+
+**Regression test:** for one owner, send `POST /orders/A/cancel` with key `K` and an empty body. Repeat it and assert the original response and one cancellation of A. Send `POST /orders/B/cancel` with the same key and empty body. Assert 422, no replay of A's response, and B remains active. With a fresh key, B can be cancelled.

@@ -101,7 +101,14 @@ A Quartz job deletes processed rows older than `RetentionPeriod` in batches (`DE
 ## Inbox (Consumer Idempotency)
 Every consumer must tolerate duplicates. Use one of the two approaches, inside the **same transaction** as the business effect:
 
-1. **Natural key + unique constraint** — when the message creates an entity with a business key (`store_id + order_id`). Insert and treat a unique violation (`PostgresException.SqlState == "23505"`) as "already processed". A check-then-insert without a unique constraint is **not** enough: two parallel deliveries both pass the check.
+1. **Natural key + unique constraint** — use this when the key uniquely identifies the same business operation. Specify the exact deduplication constraint in the insert:
+   ```sql
+   INSERT INTO orders (store_id, order_id, external_ref)
+   VALUES (@StoreId, @OrderId, @ExternalRef)
+   ON CONFLICT (store_id, order_id) DO NOTHING
+   RETURNING order_id;
+   ```
+   An empty result indicates a conflict on that key. Treat it as an already processed message only if the existing row is evidence of the same operation. A conflict on a different constraint propagates as an error. SQLSTATE `23505` alone cannot identify a duplicate. Keep the insert and business effects in the same transaction.
 2. **Inbox table** — for everything else:
    ```sql
    CREATE TABLE inbox_messages (
@@ -113,11 +120,17 @@ Every consumer must tolerate duplicates. Use one of the two approaches, inside t
    ```
    ```sql
    INSERT INTO inbox_messages (consumer, message_id) VALUES (@Consumer, @MessageId)
-   ON CONFLICT DO NOTHING;
+   ON CONFLICT (consumer, message_id) DO NOTHING;
    ```
    0 rows affected → the message was already processed: commit nothing else, acknowledge and return. Cleanup by retention, like the outbox.
 
-Side effects outside the database (HTTP calls, emails, S3 writes) cannot be part of the transaction. Make them idempotent on the receiving side (idempotency key = `message-id`) or move them behind another outbox.
+For a consumer that handles both representations during a Kafka migration, use a dedicated inbox key `(logical_consumer, event_id)` as described in [the Kafka cutover](./kafka.md#breaking-change-cutover). Physical message IDs still identify outbox rows and their redeliveries.
+
+### External Effects
+
+An outbox can durably hand off an external operation, but the relay can crash after the receiver executes it and before the relay records the result. For a receiver that deduplicates, persist a stable operation key and request payload before dispatch. Reuse both on retry. Derive the key from the logical event and the particular effect, or an existing business operation ID. A representation-specific outbox row ID cannot deduplicate the same effect across v1 and v2.
+
+If the receiver cannot deduplicate, persist the dispatch intent before sending. After a lost response or a crash that leaves the outcome unknown, reconcile by the operation's stable reference before any repeat. A confirmed success completes the operation without another call. Retry only after confirming the prior effect did not happen and cannot still complete. If the outcome cannot be established, retain the operation for manual resolution. See [API client retry rules](../../api-clients/SKILL.md#rest-api-clients) and [unknown outcomes in sagas](../../sagas-processes/SKILL.md#external-effect-with-an-unknown-outcome).
 
 Inbox/idempotency retention covers the permitted replay and recovery horizon. A DB restore may remove records of messages/effects already executed elsewhere; retain/reconcile external business keys before replay, including pending outbox rows restored to an older state. [data-recovery](../../data-recovery/SKILL.md) owns that drill/runbook; broker producer idempotence alone does not prevent repeated external business effects after a rewind.
 
@@ -126,6 +139,8 @@ Inbox/idempotency retention covers the permitted replay and recovery horizon. A 
 - The relay publishes a pending row and marks it processed; a broker failure increments attempts and schedules a retry.
 - Two relay instances do not publish the same locked row concurrently (SKIP LOCKED); a crash after broker confirmation and before the DB commit can still cause a later duplicate, which the consumer deduplicates.
 - A consumer that receives the same `message-id` twice changes state once (inbox).
+- Natural-key regression: one duplicate `(store_id, order_id)` yields an empty insert result and one business effect. A different `order_id` with the same unique `(store_id, external_ref)` raises a constraint error, rolls back and does not settle as a successfully processed message.
+- External-effect regression: the receiver records a payment and the relay crashes before persisting the result. On restart, verify exactly one payment. With receiver deduplication, a retry uses the same operation key and payload. Without it, an unknown outcome causes reconciliation or manual resolution with no repeated payment.
 
 ## Ready-Made Frameworks
 Do not add an outbox/messaging framework without explicit approval. If one is discussed:
