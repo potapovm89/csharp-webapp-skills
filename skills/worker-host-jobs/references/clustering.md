@@ -3,7 +3,7 @@
 ## The Problem
 With the default in-memory job store every replica of WorkerHost has its own scheduler. With 3 pods every job fires 3 times. `[DisallowConcurrentExecution]` only prevents overlap **inside one scheduler**; it does nothing across replicas.
 
-Choose one approach explicitly for every WorkerHost and write it down in `docs/arch/`:
+Choose one approach explicitly for every WorkerHost and record it in `docs/settings/workerhost.md`. Link the applicable architectural decision when the strategy changes:
 
 | Approach | When |
 | -------- | ---- |

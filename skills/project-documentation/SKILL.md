@@ -17,23 +17,25 @@ Concrete minimums that are easy to skip:
 - `docs/roles/` exists as soon as the first `[Authorize]` appears; `docs/adr/` gets a record for every user decision recorded in `AGENTS.md` (Stories mechanism, host topology, WorkerHost replicas); `docs/runbooks/` gets a DLQ replay runbook with the first consumer.
 - Tool output (language-server logs, generated previews, `*.log`) is never committed; add it to `.gitignore`.
 
-## Documentation Structure
-- `docs/description.md`: High-level business overview of the solution.
-- `docs/arch/`: C4 architecture diagrams in Structurizr DSL (`workspace.dsl`).
-- `docs/contracts/api/`: REST API documentation (one file per controller).
-- `docs/contracts/api-clients/`: External REST API clients documentation.
-- `docs/contracts/gRPC/`: gRPC service contracts documentation.
-- `docs/contracts/kafka/` & `docs/contracts/rabbitmq/`: Message broker topic and queue contracts.
-- `docs/contracts/realtime/`: SignalR hub contracts (one file per hub, `realtime-signalr`).
-- `docs/database/`: Database schemas (`schema.dbml` for PostgreSQL, Markdown for Mongo and Redis).
-- `docs/roles/`: Roles and authorization permissions.
-- `docs/security/`: Threat model, scoped ASVS/control evidence, identity/MFA/step-up mapping, audit guarantees and vulnerability-response policy (`security`).
-- `docs/settings/`: Host configuration files documentation.
-- `docs/delivery/pipeline.md`: CI/CD stage/gate contract, artifact identity/evidence, trust/exception policy and promotion/rollback decisions (`delivery-and-supply-chain`).
-- `docs/reliability/<journey>.md`: Applicable NFR/SLI/SLO, measurement/window, load/failure acceptance, alert/budget policy and evidence (`reliability-and-performance`).
-- `docs/recovery/plan.md` and `docs/recovery/drills/`: Store/side-effect inventory, approved RPO/RTO/retention, restore/reconciliation procedure and measured drill results (`data-recovery`).
-- `docs/adr/`: Architecture Decision Records (`NNNN-<title>.md`), immutable after acceptance.
-- `docs/runbooks/`: Runbooks for every alert, DLQ replay, outbox backlog, failed migration, secret rotation.
+## Route a Change to Its Documentation
+
+Review the task diff and select every row whose contract or behavior changed. Read the relevant reference before editing and compare the result against the stated source.
+
+| Change | Source to read | Target and check |
+|---|---|---|
+| Product behavior | Accepted requirements and observable behavior | `docs/description.md`: verify supported user flows and label planned ones. |
+| REST controller | Routing, policies, DTOs and OpenAPI | `docs/contracts/api/<controller>.md`: verify methods, routes, permissions and responses for that controller. |
+| External API client | Client implementation and provider contract | `docs/contracts/api-clients/<client>.md`: verify operations, timeouts, errors and retry semantics. |
+| gRPC or real-time contract | `.proto` files or hub methods and payload types | `docs/contracts/gRPC/` or `docs/contracts/realtime/`: verify methods, messages and access rules. |
+| Broker contract | Producer/consumer code and topology | `docs/contracts/kafka/` or `docs/contracts/rabbitmq/`: verify destination, versions, keys and retry/DLQ routing. |
+| Persistent schema | Migration, model and storage configuration | `docs/database/`: compare PostgreSQL DBML with changed tables, keys and indexes. For Mongo or Redis, compare the Markdown record with the actual data and retention rules. |
+| Roles or security boundary | Authorization policies, claims mapping and applicable ADR | `docs/roles/` and affected `docs/security/` records: verify permissions, ownership and evidence. |
+| Host setting | Options class, binding and effective configuration | `docs/settings/<host>.md`: verify keys, applicable defaults and validation. |
+| Topology or architectural decision | Project references, wiring and accepted project decision | Configured C4 workspace under `docs/arch/` and applicable `docs/adr/NNNN-<title>.md`: verify relationships and decision status. Keep accepted ADRs immutable. |
+| Delivery, reliability or recovery | CI and rendered manifests, telemetry and queries, or store inventory and restore evidence | `docs/delivery/pipeline.md`, `docs/reliability/<journey>.md` or `docs/recovery/`: verify applicable gates, measurement, objectives and evidence using the owning skill. |
+| Alert or operator procedure | Alert rule, failure path and approved operating procedure | `docs/runbooks/`: verify the trigger, owner, actions and observable recovery outcome. |
+
+**Example from `it-letter`** — `docs/contracts/api/README.md` summarizes several controllers. For a change in `MessagesController`, compare the controller and its OpenAPI operations with `docs/contracts/api/messages.md`. Create the per-controller file if missing and use the README as an index.
 
 ## Subtopic References
 - [arch-dsl.md](./references/arch-dsl.md) — Structurizr C4 DSL modeling.
@@ -42,3 +44,9 @@ Concrete minimums that are easy to skip:
 - [adr-and-runbooks.md](./references/adr-and-runbooks.md) — ADR template and rules, runbook template, DLQ replay runbook.
 
 Delivery, reliability and recovery document content is defined by [delivery-and-supply-chain](../delivery-and-supply-chain/SKILL.md), [reliability-and-performance](../reliability-and-performance/SKILL.md) and [data-recovery](../data-recovery/SKILL.md). Link their records and access-controlled evidence instead of maintaining conflicting targets/policies in multiple files. Create only the records applicable to the system; unknown targets and unperformed checks remain explicit.
+
+## Completion Evidence
+
+- For every changed public or operational contract, list the source and affected document in the MR. For a change without documentation impact, record the reason.
+- Verify each affected REST controller has its own document and that the changed methods, routes, authorization and response codes match code and OpenAPI. For other rows, record the corresponding source comparison and run the project's existing format or link validator when available.
+- Record discrepancies, open decisions and any check that could not run. Link the underlying evidence where the document describes a measured or executed result.

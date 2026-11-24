@@ -9,6 +9,16 @@ description: >-
 
 This skill covers asynchronous messaging with Apache Kafka and RabbitMQ in the solution. The target is **at-least-once** delivery: durable outbox storage and confirmed publication allow recovery, and consumers tolerate duplicates. Guarantees depend on broker replication/retention, database durability and operational recovery; they do not promise survival of arbitrary data loss or exactly-once business effects.
 
+## Choose the Workflow
+
+Read the existing topic or queue contract, broker configuration and failure path. Before implementing, read the reference for the broker in use ([Kafka](./references/kafka.md) or [RabbitMQ](./references/rabbitmq.md)) and the additional reference for the applicable workflow:
+
+| Change | Workflow |
+|---|---|
+| Consumer | Read [handlers.md](./references/handlers.md). Resolve the idempotency key, transient retry limit, terminal DLQ route and settlement point before wiring the processor. |
+| Publish without a business DB write | Use confirmed publication. Verify the destination, message key/id, version and trace headers in the contract. |
+| Publish together with a business DB write or change a relay | Read [outbox.md](./references/outbox.md). Commit the business change and outbox row together. The relay marks the row published after confirmed delivery. |
+
 ## General Broker Rules
 
 - **Topic & Queue Naming**: Always `kebab-case` (e.g. `order-created-events`); retry and dead-letter destinations are `<name>-retry` and `<name>-dlq`.
@@ -37,7 +47,7 @@ This skill covers asynchronous messaging with Apache Kafka and RabbitMQ in the s
   - Both brokers feed into `IProcessor<TKey, TMessage>` via `ConsumedMessageDto` (key, payload, headers).
   - See [handlers.md](./references/handlers.md) for the lifecycle and the new-consumer checklist.
 
-**Before implementing or changing a consumer or producer, read [kafka.md](./references/kafka.md) or [rabbitmq.md](./references/rabbitmq.md) and [handlers.md](./references/handlers.md).** Existing worker code (including the template's) is not proof of compliance: check it against the list below and fix or report every miss.
+Check existing worker code against the following rules, including code inherited from the template. Fix gaps in scope and report the rest.
 
 ## Consumer Checklist (verify before finishing)
 
@@ -46,7 +56,17 @@ This skill covers asynchronous messaging with Apache Kafka and RabbitMQ in the s
 | Ack/offset only after the message is settled (processed, or sent to retry/DLQ) | `EnableAutoOffsetStore: false` in config + `consumer.StoreOffset(result)` after settle; `EnableAutoCommit` may stay `true` (it commits stored offsets only) | `autoAck: false` + `BasicAckAsync` after settle |
 | Ordering | one partition is processed sequentially; parallelism only across partitions (one loop per assigned partition), never a semaphore over `Consume()` results of the same partition | `prefetchCount` bounds parallelism; ordering not guaranteed, consumers are idempotent |
 | Transient failure | bounded retries with backoff, then retry topic / DLQ | bounded retries (`x-delivery-limit` on quorum queues or retry queue with TTL), then DLX |
-| Poison message (malformed JSON, null payload, failed validation, unsupported `message-version`, permanent 4xx/`InvalidArgument` from a downstream call) | straight to `<topic>-dlq` with error headers | `BasicNackAsync(requeue: false)` → DLX → `<queue>-dlq` |
+| Poison message (malformed JSON, null payload, failed validation, unsupported `message-version`, permanent 4xx/`InvalidArgument` from a downstream call) | confirmed publication directly to `<topic>-dlq` with error headers | confirmed, routable publication then ACK, or `BasicNackAsync(requeue: false)` with verified at-least-once dead-lettering |
 | Never | log-and-return, catch-all that swallows, `StoreOffset` before processing | `requeue: true` on failure (infinite loop), queue without `x-dead-letter-exchange` |
 
 The processor's contract: **return = success, throw = failure**. A processor that logs a warning and returns on a bad message tells the worker "success" and the message is lost. Throw `PoisonMessageException` for permanent errors so the worker sends the message to the DLQ without retries.
+
+**Example from `it-letter`** — `BrokerConsumersIntegrationTests` sends valid, duplicate and malformed messages to Kafka and RabbitMQ and checks the two expected DB records. Use this as the deduplication case. Add a read from each actual DLQ that matches the malformed fixture by a known id or source position and verifies its payload and available diagnostic metadata.
+
+## Completion Evidence
+
+Run the applicable cases against an isolated broker and report the commands and observed results:
+
+- **Consumer:** Duplicate input produces one business effect. A poison input produces no business effect and reaches the actual DLQ. When the DLQ transfer fails, Kafka must preserve the original offset for replay, including protection against a later offset skipping it. With application-managed RabbitMQ forwarding, keep the delivery unacknowledged until a routed publish is confirmed. With broker-managed at-least-once dead-lettering, verify that the source retains the message during target failure and delivers it after recovery.
+- **Producer:** Confirmed publication reaches the configured destination with the expected key/id, version and headers. Failed confirmation, or an unroutable mandatory RabbitMQ publication, is reported as a failure to the caller.
+- **Outbox:** Rollback leaves neither the business change nor its outbox row. Commit leaves both. Failed publication keeps the row retryable or retained for intervention, and confirmation allows the relay to mark it published. A replay after confirmation with a failed relay commit retains the same message id.

@@ -7,7 +7,7 @@ description: >-
 
 # C# Code Style & Guidelines
 
-All C# code in the solution follows Microsoft C# Coding Conventions with strict project-specific rules. Ensure that an [.editorconfig](./references/.editorconfig) settings file is included in the project.
+All C# code in the solution follows Microsoft C# Coding Conventions with strict project-specific rules.
 
 ## Core Rules
 

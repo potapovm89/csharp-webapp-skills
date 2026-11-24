@@ -35,7 +35,7 @@ Every deploy drops all connections — that is normal and must be invisible to t
 ## Failure Modes
 | Failure | Behavior |
 | ------- | -------- |
-| Backplane down | sends to users/groups fail: the processor retry/DLQ path applies (at-most-once anyway), clients refetch; `/health` reports `Degraded`, not `Unhealthy` — the REST API still works |
+| Backplane down | sends to users/groups can fail: the processor retry/DLQ path applies, and clients refetch through the REST API. `/health` reports `Degraded`. SignalR provides no durable replay to the browser after the outage. |
 | Broker down | no new pushes; consumers recover via broker reconnection (`message-brokers`); outbox backlog alert stays authoritative (`observability`) |
 | RealtimeHost down entirely | clients exhaust reconnects and show the failure state; data screens keep working through refetch — nothing is lost (`blazor-frontend` / `react-frontend` data states) |
 | Poison push payload | straight to DLQ with alert (`message-brokers` consumer checklist), never sent raw to clients |

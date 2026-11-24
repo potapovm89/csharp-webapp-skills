@@ -66,8 +66,8 @@ Story: business change + outbox row (one transaction)
 ```
 
 - The send through `IHubContext` is transport, so it lives in the RealtimeHost behind a small `IRealtimePublisher` abstraction defined in `Common`; the push handler calls the abstraction, never `IHubContext` directly from Stories (`solution-architecture`).
-- The consumer is idempotent (inbox, `message-brokers`): a duplicate event must not push twice — clients get at-most-once anyway, but double pushes cause UI flicker and duplicate toasts.
-- The processor **throws on failure** like any other processor; the event goes to retry/DLQ. A failed push does not lose business state — the client refetches.
+- Use the inbox to suppress a broker redelivery after the event is durably completed. Record completion after the hub accepts the send. The hub send and the inbox commit have separate failure boundaries, so a retry after the send and before the commit may produce another hint. Keep the original event identity across retries. Include it in the client payload if the client must deduplicate a visible action, such as a toast.
+- The processor throws on failure so the retry/DLQ path applies. A successful hub send does not confirm reception by the browser. The client uses each hint as a refetch or cache invalidation signal and deduplicates visible actions by event identity.
 - Payload versioning follows `message-brokers`: additive changes keep `message-version`; unknown fields are ignored; unsupported versions go to the DLQ, not to clients.
 
 ## Limits and Backpressure

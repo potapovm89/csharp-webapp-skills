@@ -48,12 +48,16 @@ Executor   ─ Generic story execution mechanism (used by Stories and RpcHost)
 
 Hosts reach Stories in one of two ways. The choice is the user's, made at project start and recorded in `AGENTS.md` («Информация о проекте») and an ADR; do not switch silently.
 
+Before adding or changing a host, check the project decision, `.csproj` references and actual dispatch wiring. Follow the recorded topology for that host. If the decision is missing or conflicts with the wiring and the change depends on it, report the discrepancy and resolve it before changing the dispatch path.
+
 1. **In-process (default)**: each host references `Stories`, registers the Stories mechanism (`cqrs-stories`) and `DataAccess`, and dispatches directly.
-2. **Gateway**: RpcHost is the only host with `Stories`/`DataAccess`; WebHost, KafkaHost, RabbitHost, RealtimeHost (and optionally WorkerHost) call it through gRPC clients (`api-clients`). Mandatory when choosing it:
-   - RpcHost authenticates every caller (Keycloak client credentials or mTLS) and authorizes per method; network location is not authentication (`security`, Service-to-Service).
+2. **Gateway**: WebHost, KafkaHost, RabbitHost and RealtimeHost dispatch through RpcHost instead of referencing `Stories`/`DataAccess` for business operations. WorkerHost can use the gateway or retain in-process Story dispatch as recorded for that host. Mandatory for gateway calls:
+   - RpcHost authenticates each caller and enforces method permissions using the approved service-to-service profile in [security](../security/SKILL.md#changing-service-to-service-authorization). Use JWT or platform mTLS for their respective profiles. Preserve a project-specific exception only within the policy and ADR scope, with equivalent caller, method and delegation checks.
    - Ownership identifiers (tenant, store) sent in a gRPC request are trusted only from an authenticated service principal; RpcHost never accepts them from end-user–facing clients.
    - Errors keep their meaning across the hop: `AppExceptionInterceptor` → gRPC status → `AppExceptionHandler` → HTTP status.
    - Contract changes are made in `.proto` first, with the compatibility rules of `grpc-services`.
+
+**Example from `it-letter`** — WebHost uses the gRPC client and has no Stories or DataAccess project reference. WorkerHost uses `IStoryExecutor` in-process. ADR 0001 records a scoped service-token profile with per-method authorization for the gateway. Verify these two dispatch paths and apply the recorded policy to the gateway edge.
 
 ## Solution and Project File Formats
 
@@ -90,3 +94,9 @@ For library composition details, see [libraries.md](./references/libraries.md).
 For several isolated clients in one deployment (tenant resolution from claims, `tenant_id` + query filters, isolation models), see [multitenancy.md](./references/multitenancy.md).
 
 Runtime behavior of hosts in containers (probes, graceful shutdown, migrations before deploy) is covered by the `runtime-deployment` skill.
+
+## Completion Evidence
+
+- Record the decision, changed host and actual dispatch path. Run the project's architecture checks. Verify a gateway host has no direct business dependency on Stories/DataAccess, and an in-process host reaches DataAccess through Stories. Verify the expected path with an integration test for a changed entry point.
+- For a new or changed gateway edge, verify through the configured boundary that an allowed caller reaches the method, missing identity is rejected and a valid caller without method permission is denied. Include the delegation check when the edge forwards an owner or tenant identifier.
+- Record the test commands, results and any checks that could not run.

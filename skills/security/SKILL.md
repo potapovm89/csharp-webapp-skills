@@ -9,6 +9,14 @@ description: >-
 
 Security rules for every host and library in the solution. They apply to new code and to any existing code you touch; a violation found in passing is fixed or reported to the user.
 
+## Changing Service-to-Service Authorization
+
+1. Before editing, read [the service-to-service rules](./references/authn-authz.md#service-to-service). Check the applicable project policy, accepted ADR, host registration and deployment configuration. Identify who authenticates the caller, which identities can call the changed method, and how tenant delegation is verified.
+2. Use the approved enforcement boundary. Application JWT is the reference default. Platform mTLS/workload authorization or a project-specific exception must satisfy the same caller, method and delegation checks. An exception applies only to the services and environments recorded in the decision and only where the governing policy permits it.
+3. If the decision or the effective enforcement is unclear, report the mismatch and pause the affected auth change for a decision. Keep the existing controls in force and continue independent work.
+
+**Example from `it-letter`** — ADR 0001 records pre-shared service tokens for calls to `RpcHost`, with per-method authorization in `RpcServiceAuthInterceptor`. For a new method, use the recorded profile and verify the method's allowlist, credential source and tenant delegation. Treat the ADR as evidence for this project and scope only.
+
 ## Non-negotiable Rules
 
 1. **Deny by default.** Every endpoint requires an authenticated user unless it is explicitly marked `[AllowAnonymous]` with a reason in a comment. Health endpoints are the usual exception.
@@ -26,7 +34,7 @@ Security rules for every host and library in the solution. They apply to new cod
    ```
 8. **Passwords are not stored when Keycloak can do it.** Local password hashes only with PBKDF2 (600 000+ iterations for SHA-256, 16-byte salt), parameters stored with the hash, rehash on sign-in, constant-time comparison.
 9. **Personal data is minimized, protected and deletable.** Store only what the feature needs, mask it in logs, define retention, and keep it in the storage location required by law (152-FZ: personal data of Russian citizens is stored in Russia).
-10. **Internal services verify caller identity and permissions.** RpcHost/internal APIs use service JWT/client credentials or mTLS with an allowed-caller/method policy. Application JWT is the reference default. Platform-enforced mTLS/workload authorization is an alternative when its no-bypass/delegation/rotation guarantees are documented and deployment-tested; do not duplicate an equivalent platform check merely to satisfy a code-shape rule. "Only reachable inside the cluster" alone establishes no service identity. Tenant/actor delegation requires an authenticated authorized caller.
+10. **Internal services verify caller identity and permissions.** Enforce the approved service-to-service profile described above. Document and verify caller and method restrictions, protection against direct bypass, tenant/actor delegation and credential rotation. Network location alone establishes no service identity.
 
 ## Where Each Rule Is Wired (check the code, not just the skill)
 | Rule | Must exist in code |
@@ -34,7 +42,7 @@ Security rules for every host and library in the solution. They apply to new cod
 | 1 | `AddAuthorizationBuilder().SetFallbackPolicy(...RequireAuthenticatedUser())` in application-authenticated hosts; equivalent enforced platform caller policy for explicitly documented platform-authenticated internal endpoints |
 | Rate limits | `AddRateLimiter` + `UseRateLimiter` in WebHost |
 | 7 | the `Directory.Build.props` block above |
-| 10 | Application JWT: `AddAuthentication().AddJwtBearer(...)` + `UseAuthentication/UseAuthorization`, allowed service clients and client token handler. Platform mTLS alternative: protected workload identity, allowed caller/method rules, no direct bypass and deployment verification evidence |
+| 10 | Application JWT: `AddAuthentication().AddJwtBearer(...)` + `UseAuthentication/UseAuthorization`, allowed service clients and client token handler. Platform enforcement: protected workload identity, caller/method rules and deployment verification. Approved exception: ADR, effective enforcement and verification of the equivalent controls |
 
 If any row is missing — including in code inherited from the template — add it or report it to the user before finishing the task.
 
@@ -58,3 +66,9 @@ For CI runner permissions, scanner gates, SBOM/provenance and artifact authentic
 - [ ] No new high/critical NuGet advisories; licenses checked (`csharp-code-style`).
 - [ ] Personal data: purpose, retention and masking documented in `docs/`.
 - [ ] Changed trust boundaries/sensitive flows have an updated threat/abuse model and applicable verification evidence; MFA/step-up and mandatory audit requirements are explicit rather than inferred from a role or login screen.
+
+## Completion Evidence
+
+- For each changed internal authorization boundary, link the applicable policy or ADR and verify the real configured boundary in an isolated test. For gRPC, a permitted caller succeeds, absent or invalid credentials return `Unauthenticated`, and a valid caller without method permission receives `PermissionDenied`. Use the equivalent HTTP statuses for HTTP.
+- If the method accepts tenant or actor delegation, verify that changing a caller-supplied identity cannot grant access to another tenant. For platform enforcement, include a deployment test that verifies direct access without that enforcement is blocked.
+- Record the test command and outcomes. A handler-only test may verify a rule but cannot establish that the deployed endpoint enforces it.

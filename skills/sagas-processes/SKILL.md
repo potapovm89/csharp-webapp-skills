@@ -18,13 +18,35 @@ A saga exists because some steps cannot share one database transaction: an exter
 
 The default is the **in-house process manager** built on primitives this solution already runs: PostgreSQL state, `ITransactionScope`, the transactional outbox (`message-brokers`), and WorkerHost timeouts (`worker-host-jobs`). Introducing an external workflow engine (Temporal, Camunda, MassTransit sagas beyond `message-brokers` caps) is a licensing/infrastructure decision requiring an ADR and explicit user approval (`csharp-code-style`, libraries.md) — do not add one to escape modeling work.
 
+**Scope example from `it-letter`** — `MessageDeliveryProcessor` sends to a provider, records the outcome through a Story and then posts the webhook. For a saga with that ordering, exercise a crash after the provider accepts the send and before the completion Story commits. The existing workflow illustrates the failure boundary. Select a saga when the business process needs explicit compensation or coordination across steps.
+
+## Model the Transitions
+
+Read the reference for the selected pattern before implementing. For each step and compensation, fill in this record in the process ADR:
+
+| Starting state and trigger | Owner and guard | Atomic local writes and outbox event | External effect and idempotency key | Deadline and retry limit | Next state on success, failure or unknown outcome | Compensation or manual action |
+|---|---|---|---|---|---|---|
+| One row per accepted transition | Name the owning Story or participant | Include the state change and deduplication record where applicable | State how a prior effect is recognized | Use the project time source | Name all outcomes explicitly | State the reverse order and when to stop |
+
+### External Effect With an Unknown Outcome
+
+For a provider without deduplication, persist an exclusive dispatch reservation before sending. Include the process and step identity and any provider correlation key. If the worker crashes before recording the result, the reservation sends recovery to reconciliation. A timeout, expired lease or exhausted retry budget alone leaves the outcome unknown.
+
+| Reconciliation result | Transition |
+|---|---|
+| Effect confirmed | Record success and advance once, without another send. |
+| Effect confirmed absent and the prior attempt can no longer complete | Retry if the policy and budget allow. Otherwise handle the confirmed failure and compensate completed steps if required. |
+| Effect still unknown or impossible to query | Remain in reconciliation or escalate to the documented manual state. Hold forward dispatch, compensation and dependent terminal events until resolution. |
+
+Within the retry budget, a provider with confirmed deduplication may be retried using the original key and payload. If it remains unresolved at exhaustion, take the reconciliation/manual path.
+
 ## Non-Negotiable Invariants (both patterns)
 
-1. **Every step is idempotent** — it may run again after a crash; deduplicate by `(process_id, step)` in the inbox or a unique key (`message-brokers`). An external call inside a step carries a provider idempotency key derived from the same `(process_id, step)`: local dedup cannot prevent a second charge after a crash between the call and the commit (`api-clients`).
-2. **State transition + business effect + outbox row = one transaction.** A step that changed data but lost its "next step" message breaks the process; the reverse loses data. Never publish a "step done" event outside the transaction.
+1. **Every step is idempotent.** Deduplicate by `(process_id, step)` in the inbox or with a unique key (`message-brokers`). When the provider supports idempotency, derive a stable provider key from the same step identity and reuse it on every attempt. If the outcome is unknown and the provider cannot deduplicate, reconcile the effect or enter the documented manual state before any replay (`api-clients`).
+2. **State transition + local business writes + outbox row = one transaction.** Record the outbox event in that transaction and publish it through the relay. External effects have their own failure boundary and must use the idempotency or reconciliation path above.
 3. **Compensations are explicit and ordered.** List per step what undoes it; only completed steps get compensated; a compensation runs through the same outbox/inbox discipline and is itself idempotent.
 4. **Non-compensable side effects go last** (or get a human-decision state): money sent to a provider, a message to an external system — "DB rollback does not undo a payment already sent" (`data-recovery`). The process must surface these as explicit states, not silently undo them.
-5. **Stuck processes are visible**: every non-terminal process has `next_wake_at_utc` (NULL once terminal), the runner claims due ones with a lease, and the gauge alerts on overdue ones; a Failed state requires a runbook, not a log line. "Now" comes from `TimeProvider`, never from `now()` in SQL.
+5. **Stuck processes are visible.** Automatic states schedule `next_wake_at_utc` and the runner claims due work with a lease. Terminal and operator-only states clear the wake time. Monitor overdue automatic work and unresolved manual states, and document the runbook and owner. Read the current time from `TimeProvider`.
 6. **State machine is explicit**: an enum of states and allowed transitions in one place; no ad-hoc booleans describing process progress.
 
 ## Where Things Live
@@ -33,5 +55,12 @@ The default is the **in-house process manager** built on primitives this solutio
 - Tables (`process_instances`, `process_events`) are created by migrations with the standard rules (`database-migrations`).
 
 ## Subtopic References
-- [process-manager.md](./references/process-manager.md) — the default: schema, runner, step handlers, timeouts, compensation, metrics. **Read it before implementing a process.**
-- [choreography.md](./references/choreography.md) — event-driven chains without central state, and when to promote them to a process manager.
+- [process-manager.md](./references/process-manager.md) — read for orchestration: schema, runner, timeouts, compensation and metrics.
+- [choreography.md](./references/choreography.md) — read for event-driven chains: local ownership, compensation events and when to promote the chain to a process manager.
+
+## Completion Evidence
+
+- In an isolated process test, deliver the same forward trigger twice and assert a single local effect, state transition and outbox record. Include a stale or invalid trigger and assert that it leaves the state and effects unchanged.
+- Advance the test clock and exhaust retries after a confirmed failure. With completed steps A and B and definitively failed step C, expect compensation B then A and none for C. Replaying compensation must produce no additional effect.
+- With a provider fixture that has no deduplication, persist the reservation, record one external effect, then crash before the result commits. Expire the lease and reach the retry limit. Assert one provider send, zero compensations and no terminal event while the outcome is unknown. Then make reconciliation confirm the effect and assert one forward transition without a second send.
+- For a provider that supports deduplication, assert that a permitted replay uses the original key and payload and produces one external effect. Record test commands and observed transitions and effects.

@@ -10,5 +10,5 @@
 - `UseKeycloak("KeycloakOptions", postgres, out var keycloak)`: Spawns Keycloak backed by Postgres, mounting realm JSON from `Configs/`.
 
 ## Resource Referencing Rules
-- Use `AddInfrastructureReference(resource)` on projects: ensures the host waits for the container to become healthy before launching.
-- Use `WaitForCompletion(migrationsProject)` for any host requiring database schemas.
+- Use `AddInfrastructureReference(resource)` on projects that need the resource's connection information. Inspect the local helper's implementation to see whether it also calls `WaitFor`. If it only adds the reference, add a readiness wait when startup depends on the resource being usable. A readiness wait requires a health check on the resource to go beyond the running state.
+- Use `WaitForCompletion(migrationsProject)` for a host that needs the schema created by that runner.

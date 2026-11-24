@@ -44,7 +44,7 @@ COPY src/<App>.Frontend/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 8080
 ```
 
-- `npm ci` with the committed lock file (frozen install); image tags are pinned and replaced by reviewed digests for releases.
+- The example uses npm and `package-lock.json`. Use the frozen install matching the app or workspace lockfile. For pnpm, copy the workspace build inputs, use the pinned package manager and run `pnpm install --frozen-lockfile`. Pin release base images to reviewed digests.
 - Runtime configuration (API URL, OIDC authority) is served as `/config.json` mounted at deploy time, so one image works in every environment (`react-frontend`).
 - nginx config: SPA fallback to `index.html`, long cache for hashed assets, `no-cache` for `index.html`, security headers/CSP (`react-frontend`, security.md). The unprivileged image listens on 8080 as non-root.
 

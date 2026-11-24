@@ -12,6 +12,19 @@ This skill covers the frontend UI development with Blazor WebAssembly and its co
 - `Itl.<Project>.Blazor` (in `Front/`): Client-side WebAssembly app (Pages, Components, Layout, CSS isolation, client services).
 - `Itl.<Project>.BlazorHost` (in `Hosts/`): ASP.NET Core host serving WASM static assets, fallback routing (`MapFallbackToFile("index.html")`), and dedicated API controllers.
 
+## Choose the Change and Its Checks
+
+Identify the client and host projects, the affected Razor files, and the existing bUnit/browser test entry points. Follow each row that applies:
+
+| Change | Read before editing | Verify |
+|---|---|---|
+| Component or data screen | [components.md](./references/components.md) and [testing-and-quality.md](./references/testing-and-quality.md) | Control the async service in a bUnit test. Assert the applicable loading, empty, success and failure states. When the route can change during loading, assert the old request is cancelled and a late response cannot replace the new state. |
+| Form or submission | [Forms](./references/components.md#forms-editform) and [testing-and-quality.md](./references/testing-and-quality.md) | Exercise invalid input, a successful submit and an API field error. Verify the visible field messages, preserved input and single submission while a request is in flight. |
+| Authentication, session or host security | [security.md](./references/security.md) and [Browser Acceptance](./references/testing-and-quality.md#browser-acceptance) | Read the BFF or direct OIDC profile from the project decision and host registration. Resolve conflicting evidence before changing the boundary. Verify the flow through the browser and the actual server boundary. With cookie-authenticated mutations, include antiforgery rejection. |
+| Localized UI | [localization.md](./references/localization.md) | Render under a non-default culture and assert localized text and applicable date or number formatting. |
+
+**Example** — for an `EditForm` that edits a notification template, use a controlled client service to return `ProblemDetails` for the title. Assert the message next to the title field, preserved input, and one service call even if the user clicks submit again while it is pending. Correct the input and verify a successful submission.
+
 ## Key Rules
 1. **Separation of Markup and Logic**: Keep `.razor` for markup; put C# logic in code-behind `.razor.cs` partial classes.
 2. **CSS Isolation**: Put component styles in `<ComponentName>.razor.css`.
@@ -27,3 +40,9 @@ This skill covers the frontend UI development with Blazor WebAssembly and its co
 - [localization.md](./references/localization.md) — Localization and `.resx` handling.
 - [security.md](./references/security.md) — BFF/PKCE boundaries, cookie/CSRF, server authorization, CSP and safe markup.
 - [testing-and-quality.md](./references/testing-and-quality.md) — bUnit, browser journeys, accessibility and bounded rendering/network work.
+
+## Completion Evidence
+
+- Run the project's applicable client and host build commands. Run the relevant bUnit project using its documented command, or `dotnet test` from that test project's directory. Run the existing Playwright suite for a changed critical browser journey or authentication flow.
+- Record at least the changed behavior's passing case and its relevant failure case from the table. For authorization changes, verify the API rejects the unauthorized request even if the UI is bypassed. A bUnit rendering test establishes UI behavior only.
+- Report the commands, visible outcomes and any checks blocked by missing test configuration or browser infrastructure.

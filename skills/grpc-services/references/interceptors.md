@@ -3,6 +3,8 @@
 ## Registration & Order
 Interceptors are registered globally in `AddGrpc` (first registered = outermost, it wraps everything registered after it) or per service via `.Intercept(...)`. Order: metrics, then logging, then `AppExceptionInterceptor` **last** (innermost). The exception interceptor maps every exception to an `RpcException` before the observing interceptors see it, so logging and metric counters record the mapped status code. With `AppExceptionInterceptor` registered first they would see the raw exception instead.
 
+If an approved profile uses a caller-auth interceptor that emits a gRPC denial status, register it outside `AppExceptionInterceptor`. Verify the denial reaches the client and the service handler is skipped. The authorization branch follows [the host profile](../SKILL.md#authentication-and-programcs-pipeline).
+
 ```csharp
 builder.Services.AddGrpc(options =>
 {

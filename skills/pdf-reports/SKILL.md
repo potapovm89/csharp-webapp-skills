@@ -24,12 +24,16 @@ WorkerHost job (or the broker consumer of "report-requested") → GenerateReport
   3. IDocumentRenderer: Razor template → HTML (user data encoded) → PeachPDF → PDF bytes
   4. Upload to S3 via ISingleBucketFileClient under the deterministic key (s3-storage)
   5. Transaction: Generating → Ready + storage_key (+ outbox "report-ready" for a realtime push)
-Client polls the status or gets the push; the presigned link is issued by a Story after an ownership check
+Client polls the status or gets the push; a Story issues the link only for an owned, unexpired Ready report
 ```
 
-- S3 is not transactional: the object is uploaded **before** the row becomes `Ready`, never after. If the commit in step 5 fails, the retry renders again and overwrites the same deterministic key; a `Ready` row always points to an existing object.
+- Upload the object before committing `Ready` and `storage_key`. If the commit in step 5 fails, the generation retry uses the same deterministic key.
 - A report that takes longer than a couple of seconds is asynchronous: the API returns `202 Accepted` with the report id and a status URL (`web-host-api`), the client polls or gets a realtime push (`realtime-signalr`). A small interactive document may be generated synchronously inside the `RequestReport` Story — through the same steps 2–5.
 - Never stream a generated PDF straight into the HTTP response of a controller: it bypasses storage, retention and audit — an exception needs the user's explicit approval and an ADR.
+
+## Retention and Cleanup
+
+Read [the delivery workflow](./references/delivery.md#retention-and-cleanup) before changing cleanup or link issuance. A cleanup Story commits `CleanupPending` with the object identity before deleting from S3. A report in this state is unavailable for link issuance and remains discoverable by the cleanup job. After successful deletion or confirmed absence, finalize the row as deleted. A retry resumes from `CleanupPending` and uses the same object identity.
 
 ## Non-Negotiable Rules
 1. **User data is encoded inside templates** (`security`, input-and-data.md): only Razor `@value` output; `MarkupString` is allowed only for HTML sanitized upstream. URLs, paths and S3 keys are never built from raw user input.
@@ -41,3 +45,9 @@ Client polls the status or gets the push; the presigned link is issued by a Stor
 ## Subtopic References
 - [generation.md](./references/generation.md) — template project and renderer, fonts, page layout, determinism, performance, tests. **Read it before writing the first template.**
 - [delivery.md](./references/delivery.md) — report entity, statuses, S3 keys, presigned issuance, retention and cleanup.
+
+## Completion Evidence
+
+- On an isolated database and private bucket, verify an authorized `Ready` report can be downloaded before expiry. Advance the test clock past expiry. Verify that link issuance is denied and that the row has committed `CleanupPending` before the first S3 delete.
+- Inject a failure after S3 confirms deletion and before the DB finalization commits. Assert the object is absent, the row remains `CleanupPending`, and link issuance is still denied. Run cleanup again for the same report and object identity. Assert the retry accepts successful deletion or confirmed absence, the row is finalized as deleted, and another run makes no changes.
+- Simulate a storage timeout or access denial. Verify that cleanup remains pending rather than reporting deletion. Record test commands and the observed row, object and link-issuance outcomes.

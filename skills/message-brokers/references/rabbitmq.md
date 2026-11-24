@@ -49,6 +49,9 @@ await channel.BasicPublishAsync(
 - Exchanges and queues must be declared `durable: true`.
 
 ## Consumer Host Setup (RabbitHost)
+
+The example shows successful processing and the poison branch with at-least-once dead-lettering configured. Handle transient failures through the configured bounded retry policy.
+
 ```csharp
 await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: options.PrefetchCount, global: false, ct);
 
@@ -62,10 +65,10 @@ consumer.ReceivedAsync += async (_, ea) =>
         await processor.ExecuteAsync(ToConsumedMessageDto(ea), ct);
         await channel.BasicAckAsync(ea.DeliveryTag, multiple: false, ct);
     }
-    catch (Exception ex)
+    catch (PoisonMessageException ex)
     {
         logger.LogError(ex, "Failed to process message {MessageId}", ea.BasicProperties.MessageId);
-        // requeue: false -> message goes to the dead-letter exchange configured on the queue
+        // The configured quorum dead-letter strategy retains the message until the target confirms.
         await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false, ct);
     }
 };
@@ -73,7 +76,7 @@ consumer.ReceivedAsync += async (_, ea) =>
 await channel.BasicConsumeAsync(queue: rabbitMqOptions.Queue, autoAck: false, consumer: consumer, ct);
 ```
 
-- Always `autoAck: false`; acknowledge only after successful processing or an explicit dead-letter/skip decision.
+- Always `autoAck: false`. Acknowledge after successful processing or a confirmed and routable application-managed transfer.
 - Never `requeue: true` for poison messages — it causes an infinite redelivery loop. Configure a dead-letter exchange (`x-dead-letter-exchange`) on every queue.
 - Resolve a scoped `IProcessor<string, string>` per message.
 - The processor must **throw** when processing failed. If it catches and only logs, the worker acknowledges the message and it is lost.
@@ -89,6 +92,8 @@ Declared by infrastructure (Aspire `RabbitMqOptions.Exchanges` locally, IaC / de
 | Retry with delay | `<queue>-retry` with `x-message-ttl` (e.g. 30000) and `x-dead-letter-exchange` pointing back to the work exchange; the consumer republishes a failed message there with an incremented `attempts` header, and to the DLQ after `MaxAttempts` |
 
 Classic non-durable queues are acceptable only in local and test environments.
+
+For broker-managed durable dead-letter delivery, configure the source quorum queue with `dead-letter-strategy: at-least-once`, `overflow: reject-publish` and its DLX. A quorum queue alone uses default at-most-once dead-lettering. If the current topology cannot support the required retention, use confirmed, routable application-managed forwarding or report the gap. Verify with the DLQ unavailable and then restored. [RabbitMQ quorum dead-lettering](https://www.rabbitmq.com/docs/quorum-queues#activating-at-least-once-dead-lettering)
 
 ## Replaying a DLQ
 - Read the DLQ with `BasicGetAsync(autoAck: false)`, at most as many messages as the queue had at start (requeued ones are not read again).

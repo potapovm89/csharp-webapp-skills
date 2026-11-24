@@ -8,6 +8,14 @@ description: >-
 
 This skill covers draining, retries and recovery during rolling updates, scaling and restarts. In-flight requests may fail or have an unknown outcome; idempotent retries and durable messaging prevent duplicate business effects and recover unfinished work within the documented durability assumptions. Pipeline gates and artifact promotion belong to [delivery-and-supply-chain](../delivery-and-supply-chain/SKILL.md); business acceptance/observation criteria to [reliability-and-performance](../reliability-and-performance/SKILL.md); restoring persistent state to [data-recovery](../data-recovery/SKILL.md).
 
+## Verify the Affected Host
+
+1. Identify each runnable host or Job affected by the change. For each, locate its project, Dockerfile, build context and deployment entry. For shared build changes, check the affected consumers of that shared build.
+2. Use the project's image build command for each affected image. A repository-root context can use `docker build -f <host-Dockerfile> -t <local-test-tag> <repo-root>`. For Kubernetes changes, render the target overlay or chart with the project's configured tool and values. Compare the rendered image, probe paths and ports, resources and applicable Job dependencies with the host code and release contract.
+3. In an authorized local or non-production environment, exercise the affected startup, probe or rollout behavior. For a changed migration path, verify that the release uses the single pre-deploy Job and that a failed Job blocks the new rollout.
+
+**Example from `it-letter`** — WorkerHost and the EF migration runner have separate Dockerfiles, and WebHost declares `/alive` for liveness and `/health` for readiness. A successful WebHost build only covers that host. When changing WorkerHost or the migration Job, verify their own images and rendered workload entries.
+
 ## Core Rules
 1. **One image per host**, multi-stage Dockerfile on the official `mcr.microsoft.com/dotnet/aspnet:10.0` runtime image, non-root user (`USER $APP_UID`), no SDK and no secrets in the final image. See [containers.md](./references/containers.md). Every runnable host, including the migrations runner, has its `Dockerfile` next to its `.csproj` from the MR that creates the host; when a solution is created from the template, Dockerfiles of kept hosts are kept and missing ones added.
 2. **Probes** come from `MapDefaultEndpoints(port)` on a separate management port:
@@ -30,8 +38,14 @@ When bringing a solution to these rules, check every item; copying Dockerfiles f
 - [ ] Each Dockerfile copies `global.json`, `Directory.Build.props`, `Directory.Packages.props`, shared configs and sources, then runs `dotnet restore ... --locked-mode` and `publish --no-restore`.
 - [ ] Every runnable application has an image: all hosts, the migrations runner, tools run as Jobs, and the SPA frontend (see containers.md, "Frontend (SPA) image").
 - [ ] A host image does not drag another runnable project's `appsettings*.json` in (publish fails with NETSDK1152); reference such projects from tests instead.
-- [ ] `docker build` of at least one image passes locally or in CI.
+- [ ] Each affected image builds locally or in CI using its actual Dockerfile and build context.
 
 ## References
 - [containers.md](./references/containers.md) — Dockerfile template, non-root, fonts/ICU, image tags.
 - [kubernetes.md](./references/kubernetes.md) — probes, resources, graceful shutdown per host type, migrations Job, PDB, rolling update settings.
+
+## Completion Evidence
+
+- For each affected image, record the Dockerfile, build context, successful command or CI job, and resulting local image ID or CI digest. For manifest changes, link the rendered workload and record the affected fields checked against the host and its image.
+- For a running service with a required dependency, verify that `/alive` and `/health` pass when healthy. When exercising a dependency outage that leaves the process running, `/health` must fail and `/alive` must still pass. For a one-shot Job, check its exit status and applicable rollout gating instead. [Kubernetes probe behavior](https://kubernetes.io/docs/concepts/workloads/pods/probes/)
+- For a changed rollout, record the applicable migration result, rollout outcome and observation evidence for the same candidate. Report unavailable checks and the scope of any configuration-only verification.

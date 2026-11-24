@@ -6,7 +6,7 @@
 - One connection per app, created by a provider/service, started after login and stopped on logout; component code never opens connections.
 - Every (re)connection re-subscribes explicitly: group memberships die with the old connection. The client keeps the set of followed ids and replays `SubscribeTo…` after reconnect — each call goes through the hub's authorization Story again (`hubs-and-contracts.md`).
 - Retry policy: exponential backoff with jitter, bounded; when it gives up (`onclose` / `Closed`), the UI shows the realtime failure state and data keeps coming from refetch.
-- Handlers are idempotent and cheap: update cache/state or set a dirty flag; the authoritative refetch goes through the normal query layer.
+- Handlers are idempotent and cheap. Use cache invalidation or a dirty flag and refetch through the normal query layer. If a hint triggers a visible action, such as a toast, deduplicate it using the stable event identity across broker retries.
 
 ## Authentication Profiles
 | Frontend profile | How the hub is reached |
@@ -157,6 +157,7 @@ public sealed class OrdersRealtimeClient(IOptions<RealtimeOptions> options, IAcc
 - Data screens keep the five data states of `blazor-frontend` (loading, empty, success, validation, failure); the connection state is a separate indicator ("live" / "reconnecting" / "offline"), and an offline connection never blocks the data shown from the API.
 
 ## Testing
-- Integration: start RealtimeHost via `WebApplicationFactory` + Testcontainers broker/Redis (`testing`), connect a real `HubConnection`, assert: unauthorized connect fails; subscribe without ownership → `HubException`; owned subscribe + event → payload received; duplicate event → single push; after a forced reconnect the client receives events only after it re-subscribes.
+- Integration: start RealtimeHost via `WebApplicationFactory` + the applicable Testcontainers dependencies (`testing`). With a real `HubConnection`, verify unauthorized connect fails, unauthorized subscribe → `HubException`, owned subscribe + event → payload received, and forced reconnect requires re-subscription. Verify a durable inbox record suppresses ordinary broker duplicates.
+- Replay after a failure between send and durable completion. Deliver both hints to the client and assert no duplicate visible action and correct state after refetch.
 - Unit: client handlers are tested with a fake connection (an interface over `.On` registrations), never a live socket.
-- E2E: one critical journey runs against the real hub in the test environment (Playwright waits for the push-driven UI update with a timeout fallback to refetch — a lost push must not fail the test: the fallback refetch is part of the design).
+- E2E: run the critical journey against the real hub in the test environment. Assert an update caused by a verified hub event with the fallback held off for that assertion. Separately drop the hint or connection and assert that refetch restores the authoritative state.

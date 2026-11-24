@@ -21,9 +21,17 @@ This skill covers orchestrating local development environments using Aspire in `
 2. **Databases**:
    - Create named databases matching connection string keys: `postgres.CreateDatabase("postgresdbForAPI", out var apiDb)`.
 3. **Migration Projects**:
-   - Register migration runners with infrastructure dependencies.
+   - Register each migration runner with its actual database reference and a readiness dependency. Use `.WaitFor(database)` with a configured health check when the runner needs a usable database. Without a health check, `WaitFor` only waits for the resource to be running. [Aspire WaitFor](https://aspire.dev/hub/glossary/waitfor/)
 4. **Host Projects**:
-   - Add projects with references: `.AddInfrastructureReference(...)` and `.WaitForCompletion(migrations)`.
+   - Add the required connection references with `.AddInfrastructureReference(...)`. A dependent host uses `.WaitForCompletion(migrations)` to wait for the migration runner's successful exit. For other infrastructure resources, use a readiness wait when the host needs the resource available at startup. [Aspire WaitForCompletion](https://aspire.dev/hub/glossary/waitforcompletion/)
+
+**Example from `it-letter`** — the AppHost replaced `WaitForStart` with `WaitFor` in resource helpers. Its dependent hosts also use `WaitForCompletion(efMigrations)`. Verify the PostgreSQL → migration runner → dependent host chain and check that PostgreSQL has a health check for actual readiness.
+
+## Verify Local Startup
+
+1. Read the AppHost project and its `launchSettings.json`. Select the configured local launch profile and verify that its effective connection references lead to local test resources.
+2. If the graph needs containers, check the configured runtime is reachable, for example with `docker info`. If it is unavailable, report the blocked check and validate the wiring from code and configuration.
+3. Run `dotnet run --project <AspireHost.csproj> --launch-profile <local-profile>` with the resolved project and profile. Use the dashboard or logs to observe prerequisite health, migration exit status and dependent host startup. A failed migrator blocks dependent startup, so inspect its error and configuration first.
 
 ## Parameters and Secrets in Resources
 - Pass `ParameterResource`s and `ReferenceExpression`s to `WithEnvironment(...)` / `WithArgs(context => ...)`; Aspire resolves them at start: `context.Args.Add(ReferenceExpression.Create($"--db-password={postgres.Resource.PasswordParameter}"));`.
@@ -36,3 +44,8 @@ Resource names in AspireHost must strictly match connection string keys in `shar
 ## Subtopic References
 - [external-resources.md](./references/external-resources.md) — Prebuilt and custom Docker resource builders.
 - [settings.md](./references/settings.md) — Configuration alignment and kebab-case validators.
+
+## Completion Evidence
+
+- Record the actual launch command, the changed dependency order and the observed resource states. For a DB-backed host, verify database readiness, successful migration completion and then the host's readiness endpoint.
+- When changing startup dependencies, use a local fixture to delay required resource readiness or fail the migrator. Verify that the dependent host stays blocked until the required condition is satisfied. Record blocked or unavailable runtime checks explicitly.
