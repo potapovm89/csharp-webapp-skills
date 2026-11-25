@@ -14,7 +14,7 @@ Real-time updates live in the dedicated `Itl.<Project>.RealtimeHost` (in `Hosts/
 2. Find the intended RealtimeHost replica count and transport in the deployment settings. One replica needs no backplane. For several replicas, read [scale-out-and-resilience.md](./references/scale-out-and-resilience.md#multi-replica-rules), use the Redis/Valkey backplane and verify the configured transport: WebSockets with skipped negotiation for all clients, or session affinity when clients negotiate.
 3. Read [hubs-and-contracts.md](./references/hubs-and-contracts.md). Trace the changed event from the committed state to the authorized group and the client's authoritative refetch. Record the client, transport and replica profile used. If the change depends on an undecided profile, resolve it before wiring the affected branch.
 
-**Scope example from `it-letter`** — `MessagesController.GetThemedMessageById` reads current message state and history for the authenticated tenant. If adding push updates to a similar screen, keep that read as the authoritative recovery path and use the push to trigger it. This is a REST example. Use a hub fixture to exercise delivery and reconnect.
+**Scope example** — A REST endpoint reads current state and history for the authenticated tenant. Keep that endpoint as the authoritative recovery path and use push as a trigger to reread the state. Verify delivery and reconnect through a hub fixture.
 
 ## Core Principles
 

@@ -61,7 +61,7 @@ Check existing worker code against the following rules, including code inherited
 
 The processor's contract: **return = success, throw = failure**. A processor that logs a warning and returns on a bad message tells the worker "success" and the message is lost. Throw `PoisonMessageException` for permanent errors so the worker sends the message to the DLQ without retries.
 
-**Example from `it-letter`** — `BrokerConsumersIntegrationTests` sends valid, duplicate and malformed messages to Kafka and RabbitMQ and checks the two expected DB records. Use this as the deduplication case. Add a read from each actual DLQ that matches the malformed fixture by a known id or source position and verifies its payload and available diagnostic metadata.
+**Example** — Send a valid message, a duplicate and a malformed message through each configured broker. Assert the expected business records and read each actual DLQ to match the malformed fixture by a known ID or source position. Verify its payload and diagnostic metadata.
 
 ## Completion Evidence
 

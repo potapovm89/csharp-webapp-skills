@@ -24,7 +24,7 @@ Applies to React SPAs in the solution. Blazor projects use `blazor-frontend` ins
 2. If the change calls a new or changed API operation, trace the OpenAPI input through the generator script/config to the import used by that screen. Read [api-and-state.md](./references/api-and-state.md), regenerate using the project's script and use the generated types and client for the changed call. If the generator is missing, add it when in scope or report the missing prerequisite. For a UI-only change, preserve existing API wiring and record any deviation that affects the task.
 3. Change the feature's query or mutation, form schema and UI as applicable. Map server validation errors to fields, invalidate affected queries after mutations and localize new visible text. Use the app's test and build scripts to verify the affected flow.
 
-**Example from `it-letter`** — the React app has `package-lock.json` and a hand-written `src/api/client.ts` that calls `fetch`. Use `npm ci` for this lockfile. For a changed API call, check for a generator, its OpenAPI input and the actual import. The existence or name of `client.ts` alone cannot establish that the call uses generated code.
+**Example** — A React app has `package-lock.json` and a hand-written `fetch` wrapper. Use `npm ci` for this lockfile. For a changed API call, inspect the actual import and look for the generator and its OpenAPI input before treating the client as generated.
 
 ## Core Rules
 1. **TypeScript strict**: `"strict": true`, `"noUncheckedIndexedAccess": true`; `any` is prohibited (use `unknown` + narrowing); no `@ts-ignore` without a comment explaining why.

@@ -17,7 +17,7 @@ For a new or changed HTTP call, check its effective retry policy before editing:
 2. If the operation changes state, keep automatic retries disabled unless the receiving system guarantees deduplication for that operation. If the result is unknown and deduplication is unavailable, reconcile the outcome before resending. For a supported retry, reuse the same key and payload across attempts and keep one retry owner within the caller's time budget.
 3. Verify the policy through the client built by the real DI registration. If the shared default needs changing, check its impact on other clients and report any correction outside the task's scope.
 
-**Example from `it-letter`** — `WebhookDispatcher` sends a POST through a typed client that inherits `AddServiceDefaults`. The presence of an HTTP client registration alone cannot show whether the POST is retried. Inspect the shared resilience handler and test that registered client with a fake webhook receiver.
+**Example** — A typed webhook client inherits the host’s shared resilience settings. Inspect those settings and use a fake receiver to count POST attempts when the first response fails. Check that a retry happens only under the operation’s documented idempotency policy.
 
 - **Location**: `Itl.<Project>.Common/Services/<ServiceName>/`
 - **Pattern**: Interface `I<Service>Client` + implementation `<Service>Client(HttpClient client)`.

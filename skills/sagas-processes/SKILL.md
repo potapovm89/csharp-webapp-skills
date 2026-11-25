@@ -18,7 +18,7 @@ A saga exists because some steps cannot share one database transaction: an exter
 
 The default is the **in-house process manager** built on primitives this solution already runs: PostgreSQL state, `ITransactionScope`, the transactional outbox (`message-brokers`), and WorkerHost timeouts (`worker-host-jobs`). Introducing an external workflow engine (Temporal, Camunda, MassTransit sagas beyond `message-brokers` caps) is a licensing/infrastructure decision requiring an ADR and explicit user approval (`csharp-code-style`, libraries.md) — do not add one to escape modeling work.
 
-**Scope example from `it-letter`** — `MessageDeliveryProcessor` sends to a provider, records the outcome through a Story and then posts the webhook. For a saga with that ordering, exercise a crash after the provider accepts the send and before the completion Story commits. The existing workflow illustrates the failure boundary. Select a saga when the business process needs explicit compensation or coordination across steps.
+**Scope example** — A delivery workflow calls a provider, records the outcome and then posts a webhook. Exercise a crash after the provider accepts the send and before the outcome commits. Select a saga when that process needs explicit compensation or coordination across steps.
 
 ## Model the Transitions
 

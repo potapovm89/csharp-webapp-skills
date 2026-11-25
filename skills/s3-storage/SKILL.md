@@ -15,7 +15,7 @@ This skill covers working with S3-compatible object storage across all environme
 2. Use `ISingleBucketFileClient` for the configured bucket and `IFileClient` for operations on several buckets. Derive keys from trusted identifiers and pass the caller's cancellation token to storage calls.
 3. Define the outcomes for the changed operation before wiring it into a Story or API. An empty listing returns an empty collection. For a read, map a confirmed missing key to the application's not-found outcome. Keep access denied, cancellation and storage faults distinct. For a presigned link, verify the caller can access the object before signing and use the endpoint reachable by the recipient.
 
-**Scope example from `it-letter`** — `ExternalAttachmentDownloader` fetches externally hosted files over HTTP and tests the cumulative byte limit and rejected URLs. A task limited to that behavior uses the HTTP client and security rules. Adding application-owned object storage is a separate S3 scenario.
+**Scope example** — An attachment downloader fetches files over HTTP and enforces a cumulative byte limit and URL policy. Use HTTP client and security rules for that behavior. Apply the S3 skill when adding application-owned object storage.
 
 ## Environment Setup
 - **Deployed environments**: any S3-compatible storage (e.g. Garage, Ceph RGW, AWS S3). Which one is used is defined by the solution's infrastructure, not by the code: the code works only through the S3 API.

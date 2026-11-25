@@ -11,7 +11,7 @@ This skill covers the development and orchestration of background workers and sc
 
 Before editing a job, read the host-to-Stories topology in the project's AGENTS/ADR, then check the replica strategy in `docs/settings/workerhost.md` and the effective deployment configuration. For several replicas, read [clustering.md](./references/clustering.md). Resolve conflicting settings before changing coordination.
 
-**Example from `it-letter`** — the delivery job delegates to `MessageDeliveryProcessor`, which dispatches through `IStoryExecutor`. The claim Story uses a domain service that selects rows with `FOR UPDATE SKIP LOCKED`. The job schedules and coordinates work. Stories own the business operation and its data access.
+**Example** — A scheduled delivery job dispatches a Story through `IStoryExecutor`. A domain service claims rows with `FOR UPDATE SKIP LOCKED`. Keep scheduling and coordination in the job and the business operation in the Story.
 
 ## Architecture
 - Jobs implement `Quartz.IJob` with suffix `Job` (e.g. `OrderExpirationJob`).

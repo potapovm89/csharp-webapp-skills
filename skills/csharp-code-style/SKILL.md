@@ -9,6 +9,10 @@ description: >-
 
 All C# code in the solution follows Microsoft C# Coding Conventions with strict project-specific rules.
 
+## EditorConfig
+
+Use the solution’s existing `.editorconfig`, including narrower overrides. For a new solution without one, use the [starter `.editorconfig`](./references/.editorconfig) at the solution root. The naming groups apply PascalCase to properties at every accessibility, `_camelCase` to private and protected fields, and `UPPER_CASE_WITH_UNDERSCORES` to constants.
+
 ## Core Rules
 
 1. **Naming Conventions**:
@@ -96,3 +100,7 @@ All C# code in the solution follows Microsoft C# Coding Conventions with strict 
 7. **Nullable Reference Types & Warnings**:
    - `<Nullable>enable</Nullable>` for every project; warnings are fixed, not suppressed. A full build (`dotnet build --no-incremental`) has 0 warnings; `TreatWarningsAsErrors` is recommended once a solution is clean.
    - See [nullability.md](./references/nullability.md).
+
+## Completion Evidence
+
+When changing naming rules, run `dotnet format style <solution> --verify-no-changes --diagnostics IDE1006 --severity info` against a small fixture or the affected solution. Verify that PascalCase properties pass at each accessibility, `_camelCase` private and protected fields pass, and an unprefixed non-constant private or protected field and a camelCase property each trigger `IDE1006`. Include a private constant in `UPPER_CASE_WITH_UNDERSCORES` to check rule precedence. Record the naming check separately from the full build.

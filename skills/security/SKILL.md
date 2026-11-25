@@ -15,7 +15,7 @@ Security rules for every host and library in the solution. They apply to new cod
 2. Use the approved enforcement boundary. Application JWT is the reference default. Platform mTLS/workload authorization or a project-specific exception must satisfy the same caller, method and delegation checks. An exception applies only to the services and environments recorded in the decision and only where the governing policy permits it.
 3. If the decision or the effective enforcement is unclear, report the mismatch and pause the affected auth change for a decision. Keep the existing controls in force and continue independent work.
 
-**Example from `it-letter`** — ADR 0001 records pre-shared service tokens for calls to `RpcHost`, with per-method authorization in `RpcServiceAuthInterceptor`. For a new method, use the recorded profile and verify the method's allowlist, credential source and tenant delegation. Treat the ADR as evidence for this project and scope only.
+**Example** — A project ADR selects pre-shared service tokens for a gRPC gateway with per-method authorization. For a new method, verify the allowlist, credential source and tenant delegation under that profile.
 
 ## Non-negotiable Rules
 

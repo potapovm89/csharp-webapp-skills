@@ -25,7 +25,7 @@ This skill covers orchestrating local development environments using Aspire in `
 4. **Host Projects**:
    - Add the required connection references with `.AddInfrastructureReference(...)`. A dependent host uses `.WaitForCompletion(migrations)` to wait for the migration runner's successful exit. For other infrastructure resources, use a readiness wait when the host needs the resource available at startup. [Aspire WaitForCompletion](https://aspire.dev/hub/glossary/waitforcompletion/)
 
-**Example from `it-letter`** — the AppHost replaced `WaitForStart` with `WaitFor` in resource helpers. Its dependent hosts also use `WaitForCompletion(efMigrations)`. Verify the PostgreSQL → migration runner → dependent host chain and check that PostgreSQL has a health check for actual readiness.
+**Example** — A service depends on a PostgreSQL resource and a migration runner. Use `WaitFor` on the database with a readiness health check and `WaitForCompletion` on the runner. Verify that the service starts only after the database is ready and the runner has succeeded.
 
 ## Verify Local Startup
 

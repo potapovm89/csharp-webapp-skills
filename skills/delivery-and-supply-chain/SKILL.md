@@ -27,7 +27,7 @@ Define a verifiable path from reviewed source to a released artifact. Keep the p
 5. In an authorized non-production environment, verify the artifact and its gates, run the migration Job once, roll out and observe functional checks and the signals defined by `reliability-and-performance`. Promotion stops on failed or unavailable required evidence; do not mask a skipped/failed gate as success.
 6. Record the prior verified digest and compatible configuration/schema for rollback. Rolling back code is distinct from restoring data (`database-migrations`, `data-recovery`). Changes to a release candidate's content or configuration require the applicable checks again.
 
-**Example from `it-letter`** — the pipeline document calls `/health` liveness and `/alive` readiness. The WebHost manifest uses liveness → `/alive` and readiness → `/health`. When reviewing the contract, compare both probe fields and their ports against the rendered manifest and host configuration. Record the discrepancy and make the scoped correction at its source.
+**Example** — A delivery document reverses the probe roles. Compare both paths and ports against the rendered workload and host configuration. For hosts using the shared defaults, liveness should call `/alive` and readiness should call `/health`.
 
 ## Required Boundaries
 - `git-workflow` owns branch/MR conventions; `testing` owns test design; `security` and `csharp-code-style` own vulnerability/license policy. This skill wires their results into enforceable gates.

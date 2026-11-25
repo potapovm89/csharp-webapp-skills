@@ -27,7 +27,7 @@ Translate critical user journeys into measurable acceptance criteria. `observabi
 5. Verify with representative load and failure tests in an authorized non-production environment. Record latency distributions, throughput, error/freshness ratios, resource saturation, backlog drain and recovery; include dropped/unstarted test iterations and accepted work that never completed.
 6. Connect alerts to a runbook and the approved error-budget policy. Define a separate bounded rollout observation window and rollback/hold conditions for `delivery-and-supply-chain`; a short canary does not prove a month-long SLO.
 
-**Example from `it-letter`** — `docs/reliability/message-delivery.md` names `WorkerDelivery` as the freshness metric, but the implementation and export must be verified before using it. The `ConsumerMetrics` outcome counter measures broker intake. A delivery freshness SLI needs evidence from accepted-message timestamps and confirmed provider delivery, with overdue messages still represented in the denominator.
+**Example** — A recovery or reliability note names a delivery freshness metric. Verify its implementation and export. Use accepted-message timestamps and provider-confirmed delivery at the measurement boundary, and keep overdue messages in the denominator. A broker intake counter measures a different boundary.
 
 ## Requirement Record
 | Item | Evidence to provide |

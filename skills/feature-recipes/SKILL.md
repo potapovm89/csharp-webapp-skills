@@ -25,7 +25,7 @@ Reference helper signatures are in [project-helpers.md](./references/project-hel
 | Change a critical journey, its capacity or failure behavior | [Reliability](./references/recipes.md#9-critical-journey-reliability). Reuse applicable objectives and verify the changed behavior. |
 | Frontend feature | [React or Blazor feature](./references/recipes.md#10-frontend-feature-react--blazor). Regenerate the API client when the API operation changes. |
 
-**Example from `it-letter`** — the delivery processor in WorkerHost calls a Story through `IStoryExecutor`. The Story calls the domain service that claims rows with `SKIP LOCKED`. For this recipe, verify that two workers claim disjoint batches and that retrying does not duplicate a business effect.
+**Example** — A worker dispatches a Story through `IStoryExecutor`. The Story delegates row claims to a domain service using `SKIP LOCKED`. Verify that two workers claim disjoint batches and a retry produces one business effect.
 
 ## Completion Evidence
 

@@ -47,7 +47,7 @@ Read the project's approved policy, ADR, host registration and effective deploym
 
 If the policy, ADR and configuration disagree, resolve the affected boundary before editing its registration. A new method in an established host uses its existing approved profile.
 
-**Example from `it-letter`** — ADR 0001 selects service tokens for the gateway. `RpcHost` registers `RpcServiceAuthInterceptor` outside `AppExceptionInterceptor`. When adding a method under this decision, update and verify the applicable caller/method policy without adding a second JWT profile. Use the integration test pattern that exercises missing credentials and denied methods on the configured host.
+**Example** — A gateway calls a gRPC host with service tokens selected in the project’s ADR. Apply the recorded caller/method policy to the new method and use the configured host to verify missing credentials, denied methods and an allowed caller.
 
 ### Application JWT Example
 

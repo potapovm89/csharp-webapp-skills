@@ -26,7 +26,7 @@ Specify and prove recoverability of persistent business state. Replication, soft
 4. Write an ordered recovery/reconciliation runbook. Restore to a new isolated target, verify integrity and measure recovered business progress before any traffic cutover. Coordinate rollback/replay with `message-brokers` and `database-migrations`; DB rollback does not undo a payment already sent to an external provider.
 5. In an authorized non-production drill, measure actual loss/time, validate application behavior and produce a sanitized report under `docs/recovery/drills/` or an access-controlled evidence link. A missed objective creates remediation and must not be reported as a passed recovery check.
 
-**Example from `it-letter`** — the audit write path uses MongoDB, but the recovery plan omits it and lists S3 versioning and replication without corroborating repository configuration. Add MongoDB audit to the inventory and mark S3 and its controls as unverified until the operator or deployment configuration confirms them. Obtain the approved recovery objectives for the verified scope.
+**Example** — An audit writer uses MongoDB, but the recovery plan omits it and lists S3 versioning and replication without evidence. Add MongoDB audit data to the inventory. Confirm versioning and replication from deployment configuration or with the operator, and obtain approved recovery objectives for each verified store.
 
 ## Execution Boundaries
 - `AGENTS.md` prohibits this agent from connecting to production. These instructions authorize no production backup read, restore, deletion, replay or cutover; prepare the concrete runbook for the authorized operator.

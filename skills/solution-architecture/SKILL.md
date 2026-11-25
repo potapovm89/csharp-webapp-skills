@@ -57,7 +57,7 @@ Before adding or changing a host, check the project decision, `.csproj` referenc
    - Errors keep their meaning across the hop: `AppExceptionInterceptor` → gRPC status → `AppExceptionHandler` → HTTP status.
    - Contract changes are made in `.proto` first, with the compatibility rules of `grpc-services`.
 
-**Example from `it-letter`** — WebHost uses the gRPC client and has no Stories or DataAccess project reference. WorkerHost uses `IStoryExecutor` in-process. ADR 0001 records a scoped service-token profile with per-method authorization for the gateway. Verify these two dispatch paths and apply the recorded policy to the gateway edge.
+**Example** — A web gateway dispatches through gRPC and has no Stories or DataAccess project references. A worker dispatches through `IStoryExecutor` in-process. Verify both paths and the gateway policy recorded for service-token calls.
 
 ## Solution and Project File Formats
 

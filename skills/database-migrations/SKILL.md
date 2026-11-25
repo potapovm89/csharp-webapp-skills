@@ -16,7 +16,7 @@ All database schema evolutions in the solution must be executed strictly via mig
 3. **Generate and review.** Record the target migration ID and inspect the SQL for the forward path and rollback plan. For rollback, check which running versions depend on the schema, what data `Down` discards and how it can be recovered. For an expand migration, normally revert the app and keep the expanded schema. A destructive `Down` requires the applicable approval except within a disposable test created for this purpose.
 4. **Execute or prepare the handoff.** Apply only the reviewed range on the verified target. Collect the completion evidence on an isolated database, including compatibility with the preceding application version when applicable, before handing the plan to the operator.
 
-**Example from `it-letter`** — `MigrationsAndMultitenancyTests` applies and seeds migrations twice and separately rolls back to the initial migration and reapplies. Use the isolated database pattern. For a change to an existing table, also seed representative rows at the preceding revision and verify that they survive the migration and that the previous application version can still read and write the affected data.
+**Example** — In an isolated database, apply migrations and seed data twice, then roll back and reapply when the change supports rollback. For an existing table, seed representative rows at the preceding revision and verify data survival and read/write compatibility with the previous application version.
 
 ## Core Rules
 

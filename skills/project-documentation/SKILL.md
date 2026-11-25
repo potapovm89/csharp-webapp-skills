@@ -35,7 +35,7 @@ Review the task diff and select every row whose contract or behavior changed. Re
 | Delivery, reliability or recovery | CI and rendered manifests, telemetry and queries, or store inventory and restore evidence | `docs/delivery/pipeline.md`, `docs/reliability/<journey>.md` or `docs/recovery/`: verify applicable gates, measurement, objectives and evidence using the owning skill. |
 | Alert or operator procedure | Alert rule, failure path and approved operating procedure | `docs/runbooks/`: verify the trigger, owner, actions and observable recovery outcome. |
 
-**Example from `it-letter`** — `docs/contracts/api/README.md` summarizes several controllers. For a change in `MessagesController`, compare the controller and its OpenAPI operations with `docs/contracts/api/messages.md`. Create the per-controller file if missing and use the README as an index.
+**Example** — An API index summarizes several controllers. When changing a controller, compare its implementation and OpenAPI operations with the per-controller contract. Create that contract if missing and link it from the index.
 
 ## Subtopic References
 - [arch-dsl.md](./references/arch-dsl.md) — Structurizr C4 DSL modeling.
