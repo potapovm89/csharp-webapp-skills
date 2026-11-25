@@ -5,7 +5,7 @@ Choreography coordinates a process by events: each participant reacts to the pre
 ## Rules
 - Every event is published through the transactional outbox and consumed with inbox idempotency (`message-brokers`); a chain is only as durable as its weakest consumer.
 - Correlation is explicit: `correlation-id` + a business process id travel in message headers (`message-brokers`, kafka.md tracing) — without them the flow is undebuggable.
-- Compensation is also events: a consumer that fails its step publishes `<step>-failed` (not into the success topic — a dedicated topic or a `outcome` header); earlier participants subscribe and undo their own parts. Each undo is itself idempotent and transactional with its state change (`SKILL.md` invariants).
+- A confirmed step failure publishes `<step>-failed` through the outbox. Earlier participants compensate only their completed parts. An unknown external outcome stays in the owning participant's reconciliation or manual state and emits no failure event that would trigger compensation. Apply [the same outcome rules](../SKILL.md#external-effect-with-an-unknown-outcome) before allowing any retry.
 - A participant must tolerate the "failed" event arriving **before** it finished its own step (races are normal): the handler resolves the conflict against current state, not against an assumed order.
 - Non-compensable effects (external payment, physical shipment) terminate the chain into an explicit state owned by a service with a runbook — choreography does not make them undoable.
 - Event contracts are versioned like any broker message (`message-brokers`); a chain spanning N services is N× more sensitive to contract drift — additive changes only, `buf`-style discipline for payloads.

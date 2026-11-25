@@ -49,31 +49,59 @@ await channel.BasicPublishAsync(
 - Exchanges and queues must be declared `durable: true`.
 
 ## Consumer Host Setup (RabbitHost)
+
+This example uses bounded in-process retries and a source quorum queue with verified at-least-once dead-lettering. Use the project's explicit transient-error classifier and backoff. Configure a broker delivery limit if the retry policy needs a bound across crashes. Use a separate confirmed-forwarding branch for delayed retries when a worker should not hold the delivery.
+
 ```csharp
 await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: options.PrefetchCount, global: false, ct);
 
 var consumer = new AsyncEventingBasicConsumer(channel);
 consumer.ReceivedAsync += async (_, ea) =>
 {
-    await using var scope = scopeFactory.CreateAsyncScope();
-    var processor = scope.ServiceProvider.GetRequiredService<IProcessor<string, string>>();
     try
     {
-        await processor.ExecuteAsync(ToConsumedMessageDto(ea), ct);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var processor = scope.ServiceProvider.GetRequiredService<IProcessor<string, string>>();
+                await processor.ExecuteAsync(ToConsumedMessageDto(ea), ct);
+                break;
+            }
+            catch (PoisonMessageException ex)
+            {
+                logger.LogWarning(ex, "Rejected poison message {MessageId}", ea.BasicProperties.MessageId);
+                await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false, ct);
+                return;
+            }
+            catch (Exception ex) when (IsTransient(ex) && !ct.IsCancellationRequested)
+            {
+                if (attempt >= options.MaxAttempts)
+                {
+                    logger.LogError(ex, "Retry budget exhausted for message {MessageId}", ea.BasicProperties.MessageId);
+                    await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false, ct);
+                    return;
+                }
+
+                await Task.Delay(GetBackoff(attempt), ct);
+            }
+        }
+
         await channel.BasicAckAsync(ea.DeliveryTag, multiple: false, ct);
     }
-    catch (Exception ex)
+    catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
-        logger.LogError(ex, "Failed to process message {MessageId}", ea.BasicProperties.MessageId);
-        // requeue: false -> message goes to the dead-letter exchange configured on the queue
-        await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false, ct);
+        // Leave incomplete work unacknowledged. Closing the channel makes it deliverable again.
     }
 };
 
 await channel.BasicConsumeAsync(queue: rabbitMqOptions.Queue, autoAck: false, consumer: consumer, ct);
 ```
 
-- Always `autoAck: false`; acknowledge only after successful processing or an explicit dead-letter/skip decision.
+Unknown exceptions and consumer-channel failures are handled by the host's error supervisor: log and close/recover the channel so an unacknowledged delivery remains replayable. Never treat a failed ACK, NACK or forwarding publish as successful processing. A logged NACK with a verified DLX means submitted for dead-lettering. The DLQ delivery must be observed separately.
+
+- Always `autoAck: false`. Acknowledge after successful processing or a confirmed and routable application-managed transfer.
 - Never `requeue: true` for poison messages — it causes an infinite redelivery loop. Configure a dead-letter exchange (`x-dead-letter-exchange`) on every queue.
 - Resolve a scoped `IProcessor<string, string>` per message.
 - The processor must **throw** when processing failed. If it catches and only logs, the worker acknowledges the message and it is lost.
@@ -90,6 +118,8 @@ Declared by infrastructure (Aspire `RabbitMqOptions.Exchanges` locally, IaC / de
 
 Classic non-durable queues are acceptable only in local and test environments.
 
+For broker-managed durable dead-letter delivery, configure **each source quorum queue** with `dead-letter-strategy: at-least-once`, `overflow: reject-publish` and its DLX. This includes a delayed retry queue if TTL expiry dead-letters a message back to the work exchange. Verify the effective settings on the broker, including feature flags on supported versions. Quorum queues default to at-most-once dead-lettering. If the topology cannot retain deliveries as required, forward with `mandatory: true` and publisher confirmation tracking, and ACK the original only after confirming that it was routed. On a failed or returned publish, leave the original replayable and recover the channel. Use stable IDs because retry and DLQ delivery can duplicate. Test DLQ unavailability and recovery, and separately a retry queue expiring while its work target is unavailable. [RabbitMQ quorum dead-lettering](https://www.rabbitmq.com/docs/quorum-queues#activating-at-least-once-dead-lettering)
+
 ## Replaying a DLQ
 - Read the DLQ with `BasicGetAsync(autoAck: false)`, at most as many messages as the queue had at start (requeued ones are not read again).
 - Target exchange and routing key come from the `x-death` header that RabbitMQ adds on dead-lettering.
@@ -105,4 +135,4 @@ If the use-case also writes to the database, do not call `BasicPublishAsync` fro
 - Propagate the trace context in `BasicProperties.Headers` with the explicit W3C propagator (inject on publish, extract on consume) exactly as shown in `kafka.md` "Tracing".
 
 ## Versioning
-Same rules as Kafka (see `kafka.md` "Message Contracts & Versioning"): additive changes keep the version, breaking changes bump `message-version` with a parallel-publishing period; unsupported versions go to the DLQ.
+Additive changes keep the version. For a breaking change, bump `message-version` and route the new representation through a separate routing key and queue binding, so the v1 queue receives only v1. If a logical consumer processes overlapping versions, deduplicate by the shared logical event identity as in [the version cutover](./kafka.md#breaking-change-cutover). Keep the unsupported-version DLQ rule for deliveries that violate the queue's contract.

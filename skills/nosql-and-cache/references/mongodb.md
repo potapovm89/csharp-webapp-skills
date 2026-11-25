@@ -23,7 +23,7 @@ builder.Services.AddScoped<IMongoDBRepository, MongoDBRepository>();
       public DateTime CreatedDate { get; set; }   // Kind = Utc only; the BSON date type is a UTC instant
   }
   ```
-- Timestamps are UTC only (`csharp-code-style`, time-money-culture.md): the driver serializes BSON dates as UTC instants — a local time silently shifts on read. Apply `DateTime.SpecifyKind(..., DateTimeKind.Utc)` or use `DateTimeOffset`.
+- Store timestamps as UTC instants. At ingestion, prefer `DateTimeOffset` for values with a supplied offset and use `value.UtcDateTime` for a BSON date. `12:00 +03:00` must store and round-trip as `09:00Z`. For wall-clock values with a known source zone, resolve through `TimeZoneInfo` using that zone and handle ambiguous or invalid DST times explicitly. Reject input with no reliable zone or offset unless the source contract explicitly says it is UTC. Use `DateTime.SpecifyKind(value, DateTimeKind.Utc)` only to label an already-UTC value whose `Kind` was lost.
 
 ## Repository Usage
 All access must go through `IMongoDBRepository`:

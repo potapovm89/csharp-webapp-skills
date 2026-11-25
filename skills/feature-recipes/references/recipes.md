@@ -5,11 +5,13 @@
 Names below are given for both Stories mechanisms: **MediatR** (`Command`/`Handler`) and **Executor** (`StoryContext`/`Story`). Use only the one recorded in `AGENTS.md` (`cqrs-stories`). In the gateway topology (`solution-architecture`) the host step calls RpcHost over gRPC, and the Story lives behind the gRPC method (recipe 6).
 
 ## 1. REST Endpoint: Write to the DB + Publish an Event
+For a read-only endpoint, use the applicable contract, query, controller, test and documentation steps. For a write without an event, keep the required transaction and omit the outbox and broker steps.
+
 1. **Contract** — request/response DTOs in `Contracts/<Area>/` with XML docs; check compatibility rules (`web-host-api`, api-evolution.md).
 2. **Request object** — MediatR: `Stories/Commands/<Area>/<Action>Command` (`IRequest<TResult>`); Executor: `Stories/ExecutorStories/<Area>/<Action>/<Action>StoryContext` (`IResult<TResult>`). It carries the DTO and the owner id (filled from claims, not from the client).
 3. **Validator** — `<Action>CommandValidator` / `<Action>Validator` : `AbstractValidator<...>`, own file; table-driven unit tests (`cqrs-stories`, `testing`).
 4. **Mapping** — `To<Target>()` extension methods in `Common/Mappers/<Area>MappingExtensions.cs` + unit tests.
-5. **Handler / Story** — validate → (optional friendly pre-check) → one transaction: domain service `Create/Update` + `IOutboxDomainService.Add(OutboxMessageFactory.Create(...))` → commit; map unique violation `23505` to a domain error; nothing is published directly (`message-brokers`, outbox.md; `postgresql-data-access`, concurrency.md).
+5. **Handler / Story** — validate → (optional friendly pre-check) → one transaction: domain service `Create/Update` + `IOutboxDomainService.Add(OutboxMessageFactory.Create(...))` → commit. Map a unique violation to a domain error only for the expected constraint. Publish through the outbox (`message-brokers`, outbox.md and `postgresql-data-access`, concurrency.md).
 6. **Message contract** — message type constant in kebab-case, payload versioned (`messageVersion`), documented in `docs/contracts/<broker>/`.
 7. **Controller** — thin action in `WebHost/Controllers`: `[Authorize(Policy = ...)]`, owner id from `User` claims, `[ProducesResponseType]` for every status, `CancellationToken` passed through (`web-host-api`, `security`).
 8. **Tests** — integration: 201/200 happy path, 400 validation, 401 without token, 403 wrong policy/claim, 404/409 cases; DB row and outbox row written in one transaction; duplicate request does not create a second row.
@@ -19,16 +21,16 @@ Names below are given for both Stories mechanisms: **MediatR** (`Command`/`Handl
 1. **Message contract** — reuse the producer's documented contract; ignore unknown optional fields within a supported version. An unsupported `message-version` is a poison message sent to the DLQ with an alert; support for a newer version must be implemented and tested explicitly.
 2. **Processor** — `IProcessor<TKey, TMessage>` implementation in the consumer host; it calls a Story (in-process) or RpcHost (gateway), no business logic in the host. It never swallows a failure: a malformed payload throws `PoisonMessageException`, anything else rethrows — logging and returning loses the message.
 3. **Idempotency** — in the Story transaction: `IInboxDomainService.TryRegisterAsync(consumer, messageId, ct)`; `false` → already processed, return. Or rely on a natural unique key.
-4. **Failure handling** — transient errors retried with bounded backoff; validation/poison errors throw `PoisonMessageException` → straight to DLQ. Kafka stores the offset only after processing or confirmed forwarding to retry/DLQ; RabbitMQ acknowledges after processing/confirmed forwarding, or nacks without requeue to a configured DLX (`message-brokers`, kafka.md / rabbitmq.md / handlers.md).
+4. **Failure handling** — retry transient failures with bounded backoff; poison errors go directly to the DLQ. Kafka stores the offset only after processing or confirmed forwarding. RabbitMQ acknowledges after processing or confirmed, routable forwarding. Use `nack(requeue: false)` for a retained transfer only after verifying at-least-once dead-lettering on the source queue. Shutdown leaves incomplete deliveries unacknowledged (`message-brokers`, kafka.md / rabbitmq.md / handlers.md).
 5. **Tracing & metrics** — extract trace context from headers (`MessageTracing`), consumer metrics recorded (`observability`).
 6. **Configuration** — topic/queue, consumer group, DLQ names in options and Aspire resources (`aspire-environment`).
 7. **Tests** — processed once on duplicate delivery; poison message lands in the DLQ; transient failure retried then succeeds.
 8. **Docs** — consumer listed in the broker contract doc; DLQ replay runbook covers the new DLQ.
 
 ## 3. Scheduled Job on Several Replicas
-1. **Job class** — Quartz `IJob` in `WorkerHost/Jobs`, logic delegated to a Story/domain service, `[DisallowConcurrentExecution]` (`worker-host-jobs`).
+1. **Job class** — Quartz `IJob` in `WorkerHost/Jobs`. Dispatch business work through the chosen Stories mechanism or approved gateway. Only the Story accesses business domain services. Keep those services and `DbContext` out of job constructors and host-side helpers. The job may use `Common` infrastructure abstractions for coordination. Apply `[DisallowConcurrentExecution]` where the documented scheduling strategy needs it (`worker-host-jobs`).
 2. **Cluster safety** — use this WorkerHost's documented choice: one replica, clustered ADO.NET store, `IDistributedJobLock.TryAcquireAsync(JobLockKeys.X, ct)` with a unique key (`null` → another replica runs it, exit), or row-level SKIP LOCKED distribution (clustering.md). A local `[DisallowConcurrentExecution]` alone does not coordinate replicas.
-3. **Batching** — process in batches with a per-item transaction or `FOR UPDATE SKIP LOCKED`; a concurrency conflict on one item skips it, not the whole run.
+3. **Batching** — implement batching and transaction boundaries in Stories and DataAccess. For row-level distribution, the domain service claims rows with `FOR UPDATE SKIP LOCKED`. A concurrency conflict on one item skips it, not the whole run.
 4. **Schedule** — 7-field cron in options; explicit time zone; misfire policy chosen.
 5. **Shutdown** — check the cancellation token between items.
 6. **Tests** — job processes eligible rows only; leader/lock approaches exclude a concurrent run, while SKIP LOCKED workers claim disjoint batches; concurrency conflicts are skipped and recovery/retries do not duplicate business effects.

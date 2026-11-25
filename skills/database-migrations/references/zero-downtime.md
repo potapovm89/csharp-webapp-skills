@@ -15,7 +15,7 @@ A single migration that renames or drops something still used by the previous re
 | ------ | -------- |
 | Add nullable column | Safe in one step. |
 | Add column with default | PostgreSQL 11+ can store a non-volatile default as metadata without rewriting existing rows. `now()` is STABLE (transaction timestamp), not VOLATILE. Volatile defaults such as `clock_timestamp()` and `gen_random_uuid()` require per-row evaluation: add nullable, backfill, then set the default. Check the exact expression and server version. |
-| Make column NOT NULL | 1) add `CHECK (col IS NOT NULL) NOT VALID`; 2) backfill; 3) `VALIDATE CONSTRAINT`; 4) `SET NOT NULL` (uses the validated check, no full scan); 5) drop the check. |
+| Make column NOT NULL | 1) deploy write compatibility for every version that can still write or roll back; 2) backfill existing NULLs in batches and prevent their return; 3) add `CHECK (col IS NOT NULL) NOT VALID`; 4) `VALIDATE CONSTRAINT`; 5) `SET NOT NULL` with the validated check still present; 6) drop the check in a later statement. A compatibility layer that guarantees a non-NULL value on every insert and update permits adding the check before backfill. |
 | Rename column / table | Never in place. Add the new column → write both → backfill → switch reads → stop writing the old → drop the old in a later release. |
 | Change column type | Same as rename: new column of the new type, dual write, backfill, switch, drop. |
 | Drop column | Release N: code stops using it (for EF also remove it from the model/snapshot via a migration that does **not** drop it, or keep the property ignored). Release N+1: migration drops it. |
@@ -27,6 +27,10 @@ A single migration that renames or drops something still used by the previous re
 | Large data backfill | Not in the migration. A batched job/script (e.g. 1 000 rows per transaction, `FOR UPDATE SKIP LOCKED` or keyset by id) that can be stopped and resumed. |
 
 Sources for defaults: [PostgreSQL ALTER TABLE](https://www.postgresql.org/docs/18/ddl-alter.html) and [function volatility](https://www.postgresql.org/docs/18/xfunc-volatility.html).
+
+### Compatibility Before NOT NULL
+
+`NOT VALID` skips scanning existing rows, but PostgreSQL applies the check to later inserts and updates. Updating an unrelated column of a row that still contains NULL can fail. Before adding the check, verify the previous application's insert path and its update of an existing NULL row during the rolling-release window. If using a temporary database compatibility layer before backfill, test that it fills the column for both operations and that the old version still works after adding the check. Keep writers compatible through rollback, or postpone the contract change. [PostgreSQL ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)
 
 ## Locks and Timeouts
 Every migration that touches an existing table starts with timeouts, so a blocked `ALTER` fails fast instead of queueing all traffic behind it:
@@ -80,5 +84,5 @@ public class Migration_202611131600 : Migration
 - [ ] `lock_timeout` set for changes to existing tables.
 - [ ] Indexes on existing tables created `CONCURRENTLY` in a separate non-transactional migration.
 - [ ] No backfill of large tables inside the migration.
-- [ ] NOT NULL / FK added through `NOT VALID` + `VALIDATE`.
+- [ ] For a staged NOT NULL / FK, existing and rollback writers remain compatible with the new enforcement. For NOT NULL, exercise an unrelated update on an old NULL row before contract and verify the backfill and constraint separately.
 - [ ] The previous application version works with the new schema.

@@ -18,14 +18,14 @@ public interface IOrderDomainService; // Starts with 'I'
 ```
 
 ## Methods and Properties
-PascalCase:
+PascalCase at every accessibility, for instance and static properties:
 ```csharp
 public string FirstName { get; set; } = string.Empty;
 public async Task<Guid> CreateOrderAsync(...) { }
 ```
 
 ## Private and Protected Fields
-CamelCase prefixed with underscore `_`:
+Non-constant `private`, `protected`, `protected internal` and `private protected` fields use `_camelCase`. Constants follow the rule above:
 ```csharp
 private readonly IMediator _mediator;
 protected int _retryCount;

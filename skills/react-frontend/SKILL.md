@@ -12,9 +12,23 @@ Applies to React SPAs in the solution. Blazor projects use `blazor-frontend` ins
 
 **Never in `localStorage`/`sessionStorage`**: access/refresh tokens, API keys, any other credential. Tokens stay in memory (`oidc-client-ts` with `InMemoryWebStorage`) or server-side (BFF).
 
+## Change an Existing Screen or Form
+
+1. Locate the app's `package.json` and the lockfile for its app or workspace root. Use the same package manager locally, in CI and in the Docker build. If `packageManager` is set, check that it agrees with the lockfile. Resolve any conflict or missing lockfile before installing dependencies.
+
+   | Committed lockfile | Frozen install from its root |
+   |---|---|
+   | `package-lock.json` | `npm ci` |
+   | `pnpm-lock.yaml` | `pnpm install --frozen-lockfile` |
+
+2. If the change calls a new or changed API operation, trace the OpenAPI input through the generator script/config to the import used by that screen. Read [api-and-state.md](./references/api-and-state.md), regenerate using the project's script and use the generated types and client for the changed call. If the generator is missing, add it when in scope or report the missing prerequisite. For a UI-only change, preserve existing API wiring and record any deviation that affects the task.
+3. Change the feature's query or mutation, form schema and UI as applicable. Map server validation errors to fields, invalidate affected queries after mutations and localize new visible text. Use the app's test and build scripts to verify the affected flow.
+
+**Example** — A React app has `package-lock.json` and a hand-written `fetch` wrapper. Use `npm ci` for this lockfile. For a changed API call, inspect the actual import and look for the generator and its OpenAPI input before treating the client as generated.
+
 ## Core Rules
 1. **TypeScript strict**: `"strict": true`, `"noUncheckedIndexedAccess": true`; `any` is prohibited (use `unknown` + narrowing); no `@ts-ignore` without a comment explaining why.
-2. **Build**: Vite; Node LTS pinned in `.nvmrc` / `engines`; one lock file committed (`package-lock.json` or `pnpm-lock.yaml`); `npm ci` in pipelines.
+2. **Build**: Vite with Node LTS pinned in `.nvmrc` / `engines`. Commit one lockfile for the app or workspace and use its matching frozen install in pipelines.
 3. **API access only through a generated client** from the backend OpenAPI document (`openapi-typescript` + `openapi-fetch`, or `orval`). Hand-written DTO types for backend endpoints are prohibited; regenerate when the contract changes. See [api-and-state.md](./references/api-and-state.md).
 4. **Server state** lives in TanStack Query (queries, mutations, invalidation); do not copy it into global stores. Global client state (if any) — React context or Zustand, kept small.
 5. **Forms**: react-hook-form + zod schema; the schema is the single source for validation and form types. Server validation errors (ProblemDetails) are mapped back onto fields.
@@ -48,3 +62,9 @@ Front/<app>/
 - [api-and-state.md](./references/api-and-state.md) — client generation, query keys, mutations and invalidation, ProblemDetails handling, forms.
 - [security.md](./references/security.md) — OIDC PKCE, token storage, BFF option, XSS, CSP, dependency audit.
 - [testing-and-quality.md](./references/testing-and-quality.md) — Vitest, Testing Library, MSW, Playwright, accessibility, ESLint/Prettier settings.
+
+## Completion Evidence
+
+- Record the lockfile, package manager and frozen install command. Check that applicable CI and Docker commands use the same choice. The frozen install must leave the lockfile unchanged.
+- For a new or changed API call, record the generator command, OpenAPI input and generated import. Verify that generation is reproducible from that input and that the changed screen uses the generated contract for the request and response. An unrelated generated file does not satisfy this check.
+- Run the project's build and relevant tests. Run the typecheck separately if the build does not include it. For a changed form that submits to an API, cover success and server validation failure. Record commands and results, including any checks that could not run.

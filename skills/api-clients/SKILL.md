@@ -11,6 +11,14 @@ This skill covers invoking external REST and gRPC services safely and idiomatica
 
 ## REST API Clients
 
+For a new or changed HTTP call, check its effective retry policy before editing:
+
+1. Find the typed client registration and `AddServiceDefaults` / `ConfigureHttpClientDefaults`. Check for client-specific overrides and caller or job retries around the same operation.
+2. If the operation changes state, keep automatic retries disabled unless the receiving system guarantees deduplication for that operation. If the result is unknown and deduplication is unavailable, reconcile the outcome before resending. For a supported retry, reuse the same key and payload across attempts and keep one retry owner within the caller's time budget.
+3. Verify the policy through the client built by the real DI registration. If the shared default needs changing, check its impact on other clients and report any correction outside the task's scope.
+
+**Example** — A typed webhook client inherits the host’s shared resilience settings. Inspect those settings and use a fake receiver to count POST attempts when the first response fails. Check that a retry happens only under the operation’s documented idempotency policy.
+
 - **Location**: `Itl.<Project>.Common/Services/<ServiceName>/`
 - **Pattern**: Interface `I<Service>Client` + implementation `<Service>Client(HttpClient client)`.
 - **Registration**:
@@ -72,3 +80,9 @@ public static IServiceCollection AddExchangeRatesClient(
   - Set a deadline per call or through the existing client factory; retries are bounded by that deadline and enabled only for idempotent methods (see `grpc-services`, protobuf.md).
   - Do not swallow `RpcException`; let global exception handlers map status codes (`NotFound` -> 404, `InvalidArgument` -> 400).
   - Map models via manual extension methods in `Common/Mappers` or partial proto model conversion operators. AutoMapper is prohibited (see `csharp-code-style`).
+
+## Completion Evidence
+
+- For a changed HTTP write, use a local test receiver that records the effect and then drops the first response. With write retries disabled, assert one request and one effect. When a retry is explicitly supported, make the next attempt succeed and assert that both requests carry the same idempotency key and payload and produce one effect.
+- When the change enables read retries, fail the first read with a transient error and assert that the next attempt succeeds within the configured budget. When changing gRPC retries, check the effective method policy and verify that a transient failure cannot retry a non-idempotent method or outlive its deadline.
+- Record the test command, observed attempt and effect counts for the applicable cases, and any check that could not run.

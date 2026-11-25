@@ -53,7 +53,7 @@ builder.Services.AddAuthorizationBuilder()
 If `ForbiddenException` is missing in the solution, add it to `Common/Exceptions` with both mappings.
 
 ## Service-to-Service
-- Choose one enforcement boundary explicitly: application JWT validation or platform-enforced mTLS/workload authorization. The latter may replace duplicate app JWT only when direct access cannot bypass it, caller/method permissions are enforced, any forwarded identity/tenant delegation is protected, and rotation/revocation and negative access tests are evidenced. A namespace/private IP alone does not meet this requirement.
-- Internal gRPC/HTTP calls use TLS and authenticate the caller (client credentials token from Keycloak or mTLS). "It is inside the cluster" is not authentication.
+- Use the enforcement boundary selected by the project policy and ADR. The reference profiles are application JWT with service client credentials and platform-enforced mTLS/workload authorization. A policy-approved exception follows the same checks described in [the security skill](../SKILL.md#changing-service-to-service-authorization).
+- Internal gRPC/HTTP calls use TLS and authenticate the caller. Verify that direct access cannot bypass enforcement, caller/method permissions and forwarded identity or tenant delegation are protected, and rotation/revocation and negative access tests are evidenced. A namespace/private IP alone does not establish service identity.
 - Each service has its own credentials for PostgreSQL, Kafka, RabbitMQ, S3 and Redis, with access only to its own databases, topics/vhosts and buckets.
 - The migration runner uses a DB user that may change schema; the application user may only read/write data.

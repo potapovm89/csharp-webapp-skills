@@ -6,10 +6,18 @@ A RealtimeHost with more than one replica requires **both**:
 1. **Backplane** — fan-out of user/group messages between instances:
 
 ```csharp
+var channelPrefix = builder.Configuration["RealtimeOptions:BackplaneChannelPrefix"];
+if (string.IsNullOrWhiteSpace(channelPrefix))
+{
+    throw new InvalidOperationException("RealtimeOptions:BackplaneChannelPrefix is required with a shared backplane");
+}
+
 builder.Services.AddSignalR().AddStackExchangeRedis(
     builder.Configuration.GetConnectionString("redisForRealtime")!,
-    options => options.Configuration.ChannelPrefix = RedisChannel.Literal("realtime"));
+    options => options.Configuration.ChannelPrefix = RedisChannel.Literal(channelPrefix));
 ```
+
+Read `channelPrefix` from deployment settings (for example `RealtimeOptions:BackplaneChannelPrefix`) and validate that it is set when the backplane is enabled. Replicas of one deployment share a prefix. Deployments sharing Redis use distinct prefixes, including separate apps, environments and slots. Verify with the same group name in two deployments: messages reach sibling replicas in the sending deployment only. [Microsoft SignalR Redis backplane](https://learn.microsoft.com/en-us/aspnet/core/signalr/redis-backplane?view=aspnetcore-10.0)
 
 2. **Connection pinning** — the backplane does not pin a connection to a server. Without negotiation pinning, the `/negotiate` request and the following connect request can land on different instances, and the second one fails. Pick one option and record it in the RealtimeHost settings doc (`docs/settings/<host>.md`, `project-documentation`):
    - **A. WebSockets only + skipped negotiation (default).** The server allows only WebSockets (`MapHub` option `Transports`), every client sets `skipNegotiation: true` / `SkipNegotiation = true` with the WebSockets transport. The connection is a single long-lived request, so no affinity is needed — this is the documented exception in the ASP.NET Core scaling guidance.
@@ -35,7 +43,7 @@ Every deploy drops all connections — that is normal and must be invisible to t
 ## Failure Modes
 | Failure | Behavior |
 | ------- | -------- |
-| Backplane down | sends to users/groups fail: the processor retry/DLQ path applies (at-most-once anyway), clients refetch; `/health` reports `Degraded`, not `Unhealthy` — the REST API still works |
+| Backplane down | sends to users/groups can fail: the processor retry/DLQ path applies, and clients refetch through the REST API. `/health` reports `Degraded`. SignalR provides no durable replay to the browser after the outage. |
 | Broker down | no new pushes; consumers recover via broker reconnection (`message-brokers`); outbox backlog alert stays authoritative (`observability`) |
 | RealtimeHost down entirely | clients exhaust reconnects and show the failure state; data screens keep working through refetch — nothing is lost (`blazor-frontend` / `react-frontend` data states) |
 | Poison push payload | straight to DLQ with alert (`message-brokers` consumer checklist), never sent raw to clients |
