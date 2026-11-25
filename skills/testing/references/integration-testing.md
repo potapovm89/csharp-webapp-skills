@@ -17,8 +17,19 @@ public class RedisRabbitMqS3Collection :
     ICollectionFixture<RustFsContainerFixture>;
 
 [Collection(TestCollectionNames.RedisRabbitMqS3)]
-public class PaymentControllerTests(ApplicationWebHostFactory factory) : IDisposable { ... }
+public class PaymentControllerTests(ApplicationWebHostFactory factory) : IClassFixture<ApplicationWebHostFactory>
+{
+    [Fact]
+    public async Task GetPayment_ExistingPayment_ReturnsOk()
+    {
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/payments/42");
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+    }
+}
 ```
+
+The collection registers only the shared containers. The example assumes `ApplicationWebHostFactory` can be constructed by xUnit (a parameterless constructor or supported fixture dependencies) and the fixture seeds payment 42. If the project factory requires per-test `ITestOutputHelper`, construct it in the test rather than injecting it as a class fixture and dispose it with the test. Verify that discovery and execution reach the first HTTP request.
 
 ## In-Memory Host Configuration
 Override connection strings and mock external 3rd-party services:

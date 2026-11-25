@@ -6,10 +6,18 @@ A RealtimeHost with more than one replica requires **both**:
 1. **Backplane** — fan-out of user/group messages between instances:
 
 ```csharp
+var channelPrefix = builder.Configuration["RealtimeOptions:BackplaneChannelPrefix"];
+if (string.IsNullOrWhiteSpace(channelPrefix))
+{
+    throw new InvalidOperationException("RealtimeOptions:BackplaneChannelPrefix is required with a shared backplane");
+}
+
 builder.Services.AddSignalR().AddStackExchangeRedis(
     builder.Configuration.GetConnectionString("redisForRealtime")!,
-    options => options.Configuration.ChannelPrefix = RedisChannel.Literal("realtime"));
+    options => options.Configuration.ChannelPrefix = RedisChannel.Literal(channelPrefix));
 ```
+
+Read `channelPrefix` from deployment settings (for example `RealtimeOptions:BackplaneChannelPrefix`) and validate that it is set when the backplane is enabled. Replicas of one deployment share a prefix. Deployments sharing Redis use distinct prefixes, including separate apps, environments and slots. Verify with the same group name in two deployments: messages reach sibling replicas in the sending deployment only. [Microsoft SignalR Redis backplane](https://learn.microsoft.com/en-us/aspnet/core/signalr/redis-backplane?view=aspnetcore-10.0)
 
 2. **Connection pinning** — the backplane does not pin a connection to a server. Without negotiation pinning, the `/negotiate` request and the following connect request can land on different instances, and the second one fails. Pick one option and record it in the RealtimeHost settings doc (`docs/settings/<host>.md`, `project-documentation`):
    - **A. WebSockets only + skipped negotiation (default).** The server allows only WebSockets (`MapHub` option `Transports`), every client sets `skipNegotiation: true` / `SkipNegotiation = true` with the WebSockets transport. The connection is a single long-lived request, so no affinity is needed — this is the documented exception in the ASP.NET Core scaling guidance.

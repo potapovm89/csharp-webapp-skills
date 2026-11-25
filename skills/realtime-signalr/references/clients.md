@@ -88,6 +88,7 @@ Package `Microsoft.AspNetCore.SignalR.Client` (MIT) — works in WASM over the b
 public sealed class OrdersRealtimeClient(IOptions<RealtimeOptions> options, IAccessTokenProvider tokens) : IAsyncDisposable
 {
     private readonly HashSet<long> _followed = [];
+    private readonly SemaphoreSlim _startGate = new(1, 1);
     private HubConnection? _connection;
 
     /// <summary>
@@ -102,32 +103,53 @@ public sealed class OrdersRealtimeClient(IOptions<RealtimeOptions> options, IAcc
 
     public async Task StartAsync(CancellationToken ct)
     {
-        if (_connection is not null) return;
+        await _startGate.WaitAsync(ct);
+        try
+        {
+            var connection = _connection ??= CreateConnection();
+            if (connection.State != HubConnectionState.Disconnected) return;
 
-        _connection = new HubConnectionBuilder()
+            // A failed or cancelled first connection remains eligible for explicit StartAsync.
+            await connection.StartAsync(ct);
+            await RestoreSubscriptionsAsync(connection, ct);
+            StateChanged?.Invoke(HubConnectionState.Connected);
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
+    private HubConnection CreateConnection()
+    {
+        var connection = new HubConnectionBuilder()
             .WithUrl($"{options.Value.BaseUrl}/realtime/orders", o =>
             {
                 o.Transports = HttpTransportType.WebSockets;
                 o.SkipNegotiation = true;
                 o.AccessTokenProvider = GetTokenAsync;           // direct OIDC profile; omit behind a BFF
             })
-            .WithAutomaticReconnect(new JitterRetryPolicy())     // IRetryPolicy: same shape as the React policy
+            .WithAutomaticReconnect(new JitterRetryPolicy())
             .Build();
 
-        _connection.On<OrderStatusChangedDto>("OrderStatusChanged", dto => StatusChanged?.Invoke(dto));
-        _connection.Reconnecting += _ => { StateChanged?.Invoke(HubConnectionState.Reconnecting); return Task.CompletedTask; };
-        _connection.Reconnected += async _ =>
+        connection.On<OrderStatusChangedDto>("OrderStatusChanged", dto => StatusChanged?.Invoke(dto));
+        connection.Reconnecting += _ => { StateChanged?.Invoke(HubConnectionState.Reconnecting); return Task.CompletedTask; };
+        connection.Reconnected += async _ =>
         {
-            foreach (var orderId in _followed)
-            {
-                await _connection.InvokeAsync("SubscribeToOrder", orderId);
-            }
+            await RestoreSubscriptionsAsync(connection, CancellationToken.None);
             StateChanged?.Invoke(HubConnectionState.Connected);
         };
-        _connection.Closed += _ => { StateChanged?.Invoke(HubConnectionState.Disconnected); return Task.CompletedTask; };
+        connection.Closed += _ => { StateChanged?.Invoke(HubConnectionState.Disconnected); return Task.CompletedTask; };
 
-        await _connection.StartAsync(ct);
-        StateChanged?.Invoke(HubConnectionState.Connected);
+        return connection;
+    }
+
+    private async Task RestoreSubscriptionsAsync(HubConnection connection, CancellationToken ct)
+    {
+        foreach (var orderId in _followed.ToArray())
+        {
+            await connection.InvokeAsync("SubscribeToOrder", orderId, ct);
+        }
     }
 
     public async Task FollowOrderAsync(long orderId, CancellationToken ct)
@@ -159,5 +181,6 @@ public sealed class OrdersRealtimeClient(IOptions<RealtimeOptions> options, IAcc
 ## Testing
 - Integration: start RealtimeHost via `WebApplicationFactory` + the applicable Testcontainers dependencies (`testing`). With a real `HubConnection`, verify unauthorized connect fails, unauthorized subscribe → `HubException`, owned subscribe + event → payload received, and forced reconnect requires re-subscription. Verify a durable inbox record suppresses ordinary broker duplicates.
 - Replay after a failure between send and durable completion. Deliver both hints to the client and assert no duplicate visible action and correct state after refetch.
+- For the Blazor client, fail or cancel the initial connection, restore the network and call `StartAsync` again. Verify subscription succeeds and one subsequent push invokes the handler once. Automatic reconnect starts only after a successful initial connection.
 - Unit: client handlers are tested with a fake connection (an interface over `.On` registrations), never a live socket.
 - E2E: run the critical journey against the real hub in the test environment. Assert an update caused by a verified hub event with the fallback held off for that assertion. Separately drop the hint or connection and assert that refetch restores the authoritative state.

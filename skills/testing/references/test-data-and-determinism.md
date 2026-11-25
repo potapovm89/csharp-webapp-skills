@@ -55,7 +55,7 @@ var payment = new PaymentBuilder()
 
 ## Flaky Tests
 A test that fails intermittently without a code change is a defect, not weather:
-1. **Quarantine immediately**: mark it (`[Trait("Category", "Flaky")]` or the project's equivalent) so the required gate stops failing on it, and create a task with an owner. Quarantined tests still run in a separate scheduled job — quarantining is not deleting.
+1. **Quarantine with coverage preserved**: mark the test (`[Trait("Category", "Flaky")]` or the project's equivalent), assign an owner and keep running it in a scheduled job. If it is the only evidence for a required release criterion, keep promotion blocked until an equivalent check passes for that exact artifact digest or an approved, applicable, time-bound exception is in force. A scheduled run against another artifact cannot satisfy the gate. Verify that a missing or expired exception still blocks promotion.
 2. **Fix the cause in the sprint.** Typical roots: real clock usage (`FakeTimeProvider`), a parallel collision on shared data (unique values per test, sequential collection), an async race (poll helper instead of sleep), order dependence, culture leakage.
 3. **Never "fix" flakiness by retry-until-green in CI**: retries hide the race. A retry attribute may exist only for documented, bounded external flakiness (e.g. real container startup), never for the assertion under test.
 4. Deletion or rewrite of a flaky test goes through the same review as adding a test; the fix commit references the task and names the root cause.

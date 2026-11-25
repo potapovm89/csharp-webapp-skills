@@ -22,12 +22,12 @@ WorkerHost job (or the broker consumer of "report-requested") → GenerateReport
   1. Claim: Pending → Generating (xmin conflict = someone else claimed it)
   2. Build the document model from domain data (mapped via Common/Mappers, never a raw entity)
   3. IDocumentRenderer: Razor template → HTML (user data encoded) → PeachPDF → PDF bytes
-  4. Upload to S3 via ISingleBucketFileClient under the deterministic key (s3-storage)
-  5. Transaction: Generating → Ready + storage_key (+ outbox "report-ready" for a realtime push)
+  4. Upload to S3 via ISingleBucketFileClient under an immutable, attempt-specific key
+  5. Transaction: current Generating claim → Ready + storage_key (+ outbox "report-ready" for a realtime push)
 Client polls the status or gets the push; a Story issues the link only for an owned, unexpired Ready report
 ```
 
-- Upload the object before committing `Ready` and `storage_key`. If the commit in step 5 fails, the generation retry uses the same deterministic key.
+- Upload before committing `Ready` and the selected key. If a claim expires or the commit fails, a new attempt uses a different key. Read the [delivery workflow](./references/delivery.md#storage-keys-and-write-order) for fencing and safe cleanup of unselected uploads.
 - A report that takes longer than a couple of seconds is asynchronous: the API returns `202 Accepted` with the report id and a status URL (`web-host-api`), the client polls or gets a realtime push (`realtime-signalr`). A small interactive document may be generated synchronously inside the `RequestReport` Story — through the same steps 2–5.
 - Never stream a generated PDF straight into the HTTP response of a controller: it bypasses storage, retention and audit — an exception needs the user's explicit approval and an ADR.
 
@@ -38,7 +38,7 @@ Read [the delivery workflow](./references/delivery.md#retention-and-cleanup) bef
 ## Non-Negotiable Rules
 1. **User data is encoded inside templates** (`security`, input-and-data.md): only Razor `@value` output; `MarkupString` is allowed only for HTML sanitized upstream. URLs, paths and S3 keys are never built from raw user input.
 2. **Templates are localized** like UI text: strings via `IStringLocalizer`, dates/numbers/currency formatted with the document's culture, `CultureInfo.InvariantCulture` only for machine formats (`csharp-code-style`, time-money-culture.md).
-3. **Storage is S3-only** (`s3-storage`): deterministic keys, presigned access, no public buckets. The DB row ([delivery.md](./references/delivery.md)) is the source of truth about what was issued to whom.
+3. **Storage is S3-only** (`s3-storage`): stable report prefixes, immutable attempt keys, presigned access and private buckets. The DB row ([delivery.md](./references/delivery.md)) is the source of truth about what was issued to whom.
 4. **Retention and personal data**: every report type has a documented retention (152-FZ/GDPR, `security`); the cleanup job is part of the delivery flow, not an afterthought.
 5. **Reproducibility**: a regenerated report of the same business data is byte-different but content-identical — tests assert content, not bytes.
 
@@ -48,6 +48,7 @@ Read [the delivery workflow](./references/delivery.md#retention-and-cleanup) bef
 
 ## Completion Evidence
 
+- Pause worker A before upload until its lease expires. Let worker B upload distinct bytes and commit `Ready`, then resume A. Assert A cannot replace B's selected key or bytes. Clean up A's unselected object and verify B's content still downloads.
 - On an isolated database and private bucket, verify an authorized `Ready` report can be downloaded before expiry. Advance the test clock past expiry. Verify that link issuance is denied and that the row has committed `CleanupPending` before the first S3 delete.
 - Inject a failure after S3 confirms deletion and before the DB finalization commits. Assert the object is absent, the row remains `CleanupPending`, and link issuance is still denied. Run cleanup again for the same report and object identity. Assert the retry accepts successful deletion or confirmed absence, the row is finalized as deleted, and another run makes no changes.
 - Simulate a storage timeout or access denial. Verify that cleanup remains pending rather than reporting deletion. Record test commands and the observed row, object and link-issuance outcomes.
